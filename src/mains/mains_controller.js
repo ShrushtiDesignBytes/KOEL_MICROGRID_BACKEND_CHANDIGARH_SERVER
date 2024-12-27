@@ -1,15 +1,15 @@
 var db = require('../../config/db');
-const Solar = db.solar;
-const sequelize = db.sequelize
+const Mains = db.mains;
+const sequelize = db.sequelize;
 
 module.exports = {
 
-    //get all solar
-    getSolar: async (req, res) => {
+    //get all mains
+    getMains: async (req, res) => {
         try {
-            const solar = await Solar.findAll();
+            const mains = await Mains.findAll();
             return res.status(200).send(
-                solar
+                mains
             );
         } catch (error) {
             return res.status(400).send(
@@ -18,40 +18,41 @@ module.exports = {
         }
     },
 
-    //add solar
-    createSolar: async (req, res) => {
-        const solarArray = req.body
+    //add mains
+    createMains: async (req, res) => {
+        const mainsArray = req.body;
 
         try {
-            const createdSolar = []
+            const createdMains = [];
 
-            for (const solardata of solarArray) {
-                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation } = solardata;
+            for (const mainsdata of mainsArray) {
+                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation } = mainsdata;
+
                 try {
                     const result = await sequelize.query(
-                        `CALL insert_unique_solar(
-                        :v_breaker_status,
-                        :v_frequency,
-                        :v_current,
-                        :v_kVA,
-                        :v_kW,
-                        :v_maintainance_last_date,
-                        :v_next_due,
-                        :v_notification_alarms,
-                        :v_operating_hours,
-                        :v_power_factor,
-                        :v_shutdown,
-                        :v_total_generation,
-                        :v_total_saving,
-                        :v_total_utilisation,
-                        :v_utilisation,
-                        :v_voltagel,
-                        :v_voltagen,
-                        :v_hours_operated,
-                        :v_power_generated,
-                        :v_daily_generation,
-                        :result_json
-                    )`, {
+                        `CALL insert_unique_mains(
+                            :v_breaker_status,
+                            :v_frequency,
+                            :v_current,
+                            :v_kVA,
+                            :v_kW,
+                            :v_maintainance_last_date,
+                            :v_next_due,
+                            :v_notification_alarms,
+                            :v_operating_hours,
+                            :v_power_factor,
+                            :v_shutdown,
+                            :v_total_generation,
+                            :v_total_saving,
+                            :v_total_utilisation,
+                            :v_utilisation,
+                            :v_voltagel,
+                            :v_voltagen,
+                            :v_hours_operated,
+                            :v_power_generated,
+                            :v_daily_generation,
+                            :result_json
+                        )`, {
                         replacements: {
                             v_breaker_status: breaker_status,
                             v_frequency: frequency,
@@ -76,36 +77,33 @@ module.exports = {
                             result_json: null
                         },
                         type: sequelize.QueryTypes.RAW
-                    }
-                    );
-                   
-                    const solar = result[0][0].result_json;
-                    
-                    const data = solar === null ? 'Already saved same data in database' : solar;
-                    createdSolar.push(data);
+                    });
+
+                    const mains = result[0][0].result_json;
+
+                    const data = mains === null ? 'Already saved same data in database' : mains;
+                    createdMains.push(data);
 
                 } catch (innerError) {
-                    createdSolar.push({ error: `Failed to process data for solar: ${innerError.message}` });
+                    createdMains.push({ error: `Failed to process data for mains: ${innerError.message}` });
                 }
             }
-
-            return res.status(200).send(createdSolar);
+            return res.status(200).send(createdMains);
         } catch (error) {
             console.log(error)
-            return res.status(500).json(
+            return res.status(400).json(
                 error.message
-
             );
         }
     },
 
-    //view solar by id
-    viewSolar: async (req, res) => {
+    //view mains by id
+    viewMains: async (req, res) => {
         const id = req.params.id
         try {
-            const solar = await Solar.findByPk(id);
+            const mains = await Mains.findByPk(id);
             return res.status(200).send(
-                solar
+                mains
             );
         } catch (error) {
             return res.status(400).send(
@@ -115,11 +113,11 @@ module.exports = {
 
     },
 
-    //delete solar by id
-    deleteSolar: async (req, res) => {
+    //delete mains by id
+    deleteMains: async (req, res) => {
         const id = req.params.id;
         try {
-            const solar = await Solar.destroy({ where: { id } });
+            const mains = await Mains.destroy({ where: { id } });
             return res.status(200).send({
                 message: 'Deleted Successfully'
             });
@@ -130,18 +128,16 @@ module.exports = {
         }
     },
 
-    //solar update by id
-    updateSolar: async (req, res) => {
-        const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation } = req.body
+    //mains update by id
+    updateMains: async (req, res) => {
         const id = req.params.id;
+        const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation } = req.body;
         try {
-            const solar = await Solar.update({
+            const mains = await Mains.update({
                 breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation
             },
                 {
-                    where: {
-                        id
-                    }
+                    where: { id }
                 });
             return res.status(200).send({
                 message: 'Updated Successfully'
