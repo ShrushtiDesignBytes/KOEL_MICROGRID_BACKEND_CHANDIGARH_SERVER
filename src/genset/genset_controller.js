@@ -52,9 +52,9 @@ module.exports = {
                             :v_voltagel,
                             :v_voltagen,
                             :v_current,
-                            :v_healthIndex,
                             :v_tankCapacity, 
-                            :v_operational,
+                            :v_operational,                        
+                            :v_healthIndex,
                             :result_json
                         )`,
                         {
@@ -81,9 +81,9 @@ module.exports = {
                                 v_voltagel: JSON.stringify(voltagel),
                                 v_voltagen: JSON.stringify(voltagen),
                                 v_current: JSON.stringify(current),
-                                v_healthIndex: healthIndex,
                                 v_tankCapacity: tankCapacity,
-                                v_operational: operational,
+                                v_operational: operational,  
+                                v_healthIndex: healthIndex,
                                 result_json: null
                             },
                             type: sequelize.QueryTypes.RAW
