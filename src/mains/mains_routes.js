@@ -1,10 +1,13 @@
 const express = require('express');
-const { getMains, createMains, viewMains, deleteMains, updateMains } = require('./mains_controller.js');
+const { getMains, createMains, viewMains, deleteMains, updateMains, getChartData } = require('./mains_controller.js');
 
 const router = express.Router();
 
 //get all Overview
 router.get('/', getMains);
+
+//get all Overview
+router.get('/chart', getChartData);
 
 //add Overview
 router.post('/', createMains) 

@@ -6,12 +6,12 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
   host: process.env.DB_HOST,
   dialect: 'postgres',
   pool: { max: 20, min: 0, idle: 10000 },
-  // dialectOptions: {
-  //   ssl: {
-  //     require: true, // This will enable SSL connection
-  //     rejectUnauthorized: false // This will bypass any SSL validation issues
-  //   }
-  // },
+  dialectOptions: {
+    ssl: {
+      require: true, // This will enable SSL connection
+      rejectUnauthorized: false // This will bypass any SSL validation issues
+    }
+  },
   logging: false
 });
 

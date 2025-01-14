@@ -1,15 +1,50 @@
 var db = require('../../config/db');
 const Mains = db.mains;
 const sequelize = db.sequelize;
+const { Op } = require('sequelize');
 
 module.exports = {
 
     //get all mains
     getMains: async (req, res) => {
         try {
-            const mains = await Mains.findAll();
+            const result = await Mains.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG', 
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) / 3
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ],
+                where: {
+                    createdAt: {
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                    }
+                }
+            });
+    
+            // If result is found, log and return it
+           // console.log(result);
+
+            const mains = await Mains.findOne({
+                order: [['id', 'DESC']],  
+                limit: 1                  
+            });
+
+            if (mains && result) {
+                mains.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+            }
+
             return res.status(200).send(
-                mains
+               [mains]
             );
         } catch (error) {
             return res.status(400).send(
@@ -146,6 +181,58 @@ module.exports = {
             return res.status(400).send(
                 error.message
             );
+        }
+    },
+    getChartData: async (req, res) => {
+        try {
+            const data = await Mains.sequelize.query(
+                `
+              SELECT 
+                TO_CHAR("createdAt", 'YYYY-MM-DD HH24:00:00') AS hour,
+                SUM(
+                  ("kW"->>'phase1')::NUMERIC + 
+                  ("kW"->>'phase2')::NUMERIC + 
+                  ("kW"->>'phase3')::NUMERIC
+                ) AS totalPower,
+                AVG(
+                  ("kW"->>'phase1')::NUMERIC + 
+                  ("kW"->>'phase2')::NUMERIC + 
+                  ("kW"->>'phase3')::NUMERIC
+                ) AS power
+              FROM main
+              WHERE "createdAt" >= NOW() - INTERVAL '8 hours'
+              GROUP BY hour
+              ORDER BY hour;
+              `,
+                { type: Mains.sequelize.QueryTypes.SELECT }
+            );
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+                    // Extract hour (it should be an integer, so use parseInt)
+                    const hour = new Date(item.hour).getHours();
+
+                    // Convert totalPower and power to numbers
+                    const power = Math.floor(parseFloat(item.power)); 
+
+                    return {
+                        hour: hour,
+                        power: power 
+                    };
+                });
+            }
+
+    
+            const transformedData = transformData(data);
+
+            console.log(transformedData);
+
+
+            res.json(transformedData);
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
         }
     }
 }

@@ -5,22 +5,29 @@ const Alert = db.alert;
 const Solar = db.solar;
 const Genset = db.genset;
 const Mains = db.mains;
+const { getSolar } = require('../solar/solar_controller');
 
 module.exports = {
 
     //get all overview
     getOverview: async (req, res) => {
         try {
-            const overview = await Overview.findAll();
-            const solar = await Solar.findOne({
-                order: [['id', 'DESC']],
-            })
-            const genset = await Genset.findOne({
-                order: [['id', 'DESC']],
-            })
-            const mains = await Mains.findOne({
-                order: [['id', 'DESC']],
-            })
+            const overview = await Overview.findOne({
+                order: [['id', 'DESC']],  
+                limit: 1                  
+            });
+            const response = await fetch('http://localhost:5001/micro/solar')
+            const data = await response.json();
+            const solar = data[0]
+
+            const responseg = await fetch('http://localhost:5001/micro/genset')
+            const data_g = await responseg.json();
+            const genset = data_g[0]
+
+            const responsem = await fetch('http://localhost:5001/micro/mains')
+            const data_m = await responsem.json();
+            const mains = data_m[0]
+
             const alertCounts = await Alert.findAll({
                 attributes: [
                     [Sequelize.fn('COUNT', Sequelize.literal("CASE WHEN LOWER(severity) = 'alert' THEN 1 END")), 'alert'],

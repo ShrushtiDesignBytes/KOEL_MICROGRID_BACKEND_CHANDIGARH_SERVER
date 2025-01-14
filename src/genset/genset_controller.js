@@ -1,15 +1,64 @@
 var db = require('../../config/db');
 const Genset = db.genset;
 const sequelize = db.sequelize;
+const { Op } = require('sequelize');
 
 module.exports = {
 
     //get all genset
     getGenset: async (req, res) => {
         try {
-            const genset = await Genset.findAll();
+            const result = await Genset.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG', 
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) / 3
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ],
+                where: {
+                    createdAt: {
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                    }
+                }
+            });
+
+             const result_lastentry = await Genset.findOne({
+                            attributes: ['hours_operated_yesterday'], 
+                            where: {
+                                createdAt: {
+                                    [Op.lte]: sequelize.literal('CURRENT_DATE'), 
+                                },
+                            },
+                            order: [['createdAt', 'DESC']], 
+                            limit: 1, 
+                        });
+            
+                     //   console.log(result_lastentry.hours_operated_yesterday)
+    
+            const genset = await Genset.findOne({
+                order: [['id', 'DESC']],  
+                limit: 1                  
+            });
+
+            if (genset && result) {
+                genset.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+            }
+
+            // if(result_lastentry){
+            //     genset.dataValues.avg_hours_operated = result_lastentry.get('hours_operated');
+            // }
+
             return res.status(200).send(
-                genset
+                [genset]
             );
         } catch (error) {
             return res.status(400).send(

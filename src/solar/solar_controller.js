@@ -1,15 +1,69 @@
 var db = require('../../config/db');
 const Solar = db.solar;
 const sequelize = db.sequelize
+const { Op } = require('sequelize');
 
 module.exports = {
 
     //get all solar
     getSolar: async (req, res) => {
         try {
-            const solar = await Solar.findAll();
+            const result = await Solar.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG', 
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) / 3
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ],
+                where: {
+                    createdAt: {
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                    }
+                }
+            });
+
+            const result_lastentry = await Solar.findOne({
+                attributes: ['hours_operated'], 
+                where: {
+                    createdAt: {
+                        [Op.lte]: sequelize.literal('CURRENT_DATE'), 
+                    },
+                },
+                order: [['createdAt', 'DESC']], 
+                limit: 1, 
+            });
+
+           // console.log(result_lastentry.hours_operated)
+        
+            const solar = await Solar.findOne({
+                order: [['id', 'DESC']],  
+                limit: 1                  
+            });
+
+            if (solar && result) {
+                solar.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+            }
+
+            if(result_lastentry){
+                solar.dataValues.avg_hours_operated = result_lastentry.get('hours_operated');
+            }
+
+            await Solar.update(
+                { total_generation: Math.floor(result.get('avg_total_generations')) },  
+                { where: { id: solar.id } }  
+            );
+
             return res.status(200).send(
-                solar
+               [solar]
             );
         } catch (error) {
             return res.status(400).send(
@@ -78,9 +132,9 @@ module.exports = {
                         type: sequelize.QueryTypes.RAW
                     }
                     );
-                   
+
                     const solar = result[0][0].result_json;
-                    
+
                     const data = solar === null ? 'Already saved same data in database' : solar;
                     createdSolar.push(data);
 
@@ -150,6 +204,59 @@ module.exports = {
             return res.status(400).send(
                 error.message
             );
+        }
+    },
+
+    getChartData: async (req, res) => {
+        try {
+            const data = await Solar.sequelize.query(
+                `
+              SELECT 
+                TO_CHAR("createdAt", 'YYYY-MM-DD HH24:00:00') AS hour,
+                SUM(
+                  ("kW"->>'phase1')::NUMERIC + 
+                  ("kW"->>'phase2')::NUMERIC + 
+                  ("kW"->>'phase3')::NUMERIC
+                ) AS totalPower,
+                AVG(
+                  ("kW"->>'phase1')::NUMERIC + 
+                  ("kW"->>'phase2')::NUMERIC + 
+                  ("kW"->>'phase3')::NUMERIC
+                ) AS power
+              FROM solar
+              WHERE "createdAt" >= NOW() - INTERVAL '8 hours'
+              GROUP BY hour
+              ORDER BY hour;
+              `,
+                { type: Solar.sequelize.QueryTypes.SELECT }
+            );
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+                    // Extract hour (it should be an integer, so use parseInt)
+                    const hour = new Date(item.hour).getHours();
+
+                    // Convert totalPower and power to numbers
+                    const power = Math.floor(parseFloat(item.power)); 
+
+                    return {
+                        hour: hour,
+                        power: power 
+                    };
+                });
+            }
+
+    
+            const transformedData = transformData(data);
+
+            console.log(transformedData);
+
+
+            res.json(transformedData);
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
         }
     }
 }
