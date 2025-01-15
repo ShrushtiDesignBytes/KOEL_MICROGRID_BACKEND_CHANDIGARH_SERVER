@@ -17,7 +17,7 @@ module.exports = {
                                     ("kW"->>'phase1')::float + 
                                     ("kW"->>'phase2')::float + 
                                     ("kW"->>'phase3')::float
-                                ) / 3
+                                ) 
                             `)
                         ),
                         'avg_total_generations'
