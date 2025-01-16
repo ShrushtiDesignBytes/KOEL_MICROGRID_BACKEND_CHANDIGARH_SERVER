@@ -186,23 +186,28 @@ module.exports = {
     getChartData: async (req, res) => {
         try {
             const data = await Mains.sequelize.query(
-                `
-              SELECT 
-                TO_CHAR("createdAt", 'YYYY-MM-DD HH24:00:00') AS hour,
-                SUM(
-                  ("kW"->>'phase1')::NUMERIC + 
-                  ("kW"->>'phase2')::NUMERIC + 
-                  ("kW"->>'phase3')::NUMERIC
-                ) AS totalPower,
-                AVG(
-                  ("kW"->>'phase1')::NUMERIC + 
-                  ("kW"->>'phase2')::NUMERIC + 
-                  ("kW"->>'phase3')::NUMERIC
-                ) AS power
-              FROM main
-              WHERE "createdAt" >= NOW() - INTERVAL '8 hours'
-              GROUP BY hour
-              ORDER BY hour;
+                `SELECT 
+                TO_CHAR("createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+                    SUM(
+                            ("kW"->>'phase1')::NUMERIC + 
+                            ("kW"->>'phase2')::NUMERIC + 
+                            ("kW"->>'phase3')::NUMERIC
+                        ) AS totalPower,
+                    AVG(
+                            ("kW"->>'phase1')::NUMERIC + 
+                            ("kW"->>'phase2')::NUMERIC + 
+                            ("kW"->>'phase3')::NUMERIC
+                        ) AS averagePower
+                    FROM main
+                    WHERE "createdAt" >= (
+                            -- Get 1 AM IST on the current day and convert to UTC
+                                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC'
+                                        )
+                    AND "createdAt" <= NOW() AT TIME ZONE 'UTC'
+                    GROUP BY hour
+                    ORDER BY hour;
+            
               `,
                 { type: Mains.sequelize.QueryTypes.SELECT }
             );
@@ -210,11 +215,9 @@ module.exports = {
             // Function to convert the data
             function transformData(rawData) {
                 return rawData.map(item => {
-                    // Extract hour (it should be an integer, so use parseInt)
                     const hour = new Date(item.hour).getHours();
 
-                    // Convert totalPower and power to numbers
-                    const power = Math.floor(parseFloat(item.power)); 
+                    const power = Math.floor(parseFloat(item.averagepower)); 
 
                     return {
                         hour: hour,
@@ -226,10 +229,8 @@ module.exports = {
     
             const transformedData = transformData(data);
 
-            console.log(transformedData);
-
-
-            res.json(transformedData);
+            res.status(200).json(transformedData);
+            
         } catch (error) {
             console.error('Error fetching power data:', error);
             res.status(500).json({ error: 'Internal Server Error' });
