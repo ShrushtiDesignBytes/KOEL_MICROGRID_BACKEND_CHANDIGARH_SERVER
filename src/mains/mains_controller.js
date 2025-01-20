@@ -1,7 +1,7 @@
 var db = require('../../config/db');
 const Mains = db.mains;
 const sequelize = db.sequelize;
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 
 module.exports = {
 
@@ -11,7 +11,7 @@ module.exports = {
             const result = await Mains.findOne({
                 attributes: [
                     [
-                        sequelize.fn('AVG', 
+                        sequelize.fn('AVG',
                             sequelize.literal(`
                                 (
                                     ("kW"->>'phase1')::float + 
@@ -25,26 +25,86 @@ module.exports = {
                 ],
                 where: {
                     createdAt: {
-                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
-                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
                     }
                 }
             });
-    
-            // If result is found, log and return it
-           // console.log(result);
+
+            const result_power = await Mains.findOne({
+                attributes: [
+                    [
+                        sequelize.fn(
+                            'AVG',
+                            sequelize.literal(`
+                                    (
+                                      ("kW"->>'phase1')::float + 
+                                      ("kW"->>'phase2')::float + 
+                                      ("kW"->>'phase3')::float
+                                    )
+                                  `)
+                        ),
+                        'power_generated_yesterday'
+                    ]
+                ],
+                where: {
+                    createdAt: {
+                        [Op.gte]: sequelize.literal("CURRENT_DATE - INTERVAL '1 day'"),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE")
+                    }
+                }
+            });
+
+            const result_hours = await Mains.count({
+                where: {
+                    createdAt: {
+                        [Op.gte]: literal('CURRENT_DATE - INTERVAL \'1 day\''), // Start of the previous day
+                        [Op.lt]: literal('CURRENT_DATE') // End of the previous day
+                    },
+                    [Op.and]: [
+                        literal(`("kW"->>'phase1')::float > 0`),
+                        literal(`("kW"->>'phase2')::float > 0`),
+                        literal(`("kW"->>'phase3')::float > 0`)
+                    ]
+                }
+            });
+
+            const totalHours = result_hours / 60.0;
+            const hours = Math.floor(totalHours);
+
+            const minutesFraction = Math.round((totalHours - hours) * 60);
+            const minute = minutesFraction / 100
+
+            const formattedTime = hours + minute;
 
             const mains = await Mains.findOne({
-                order: [['id', 'DESC']],  
-                limit: 1                  
+                order: [['id', 'DESC']],
+                limit: 1
             });
 
             if (mains && result) {
                 mains.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
             }
 
+            if (result_power) {
+                mains.dataValues.power_generated_yesterday = result_power.get('power_generated_yesterday');
+            }
+
+            if (result_hours) {
+                mains.dataValues.hours_operated_yesterday = formattedTime.toFixed(2);
+            }
+
+            await Mains.update(
+                {
+                    total_generation: Math.floor(result.get('avg_total_generations')),
+                    power_generated: Math.floor(result_power.get('power_generated_yesterday')),
+                    hours_operated_yesterday: formattedTime.toFixed(2)
+                },
+                { where: { id: mains.id } }
+            );
+
             return res.status(200).send(
-               [mains]
+                [mains]
             );
         } catch (error) {
             return res.status(400).send(
@@ -217,20 +277,20 @@ module.exports = {
                 return rawData.map(item => {
                     const hour = new Date(item.hour).getHours();
 
-                    const power = Math.floor(parseFloat(item.averagepower)); 
+                    const power = Math.floor(parseFloat(item.averagepower));
 
                     return {
                         hour: hour,
-                        power: power 
+                        power: power
                     };
                 });
             }
 
-    
+
             const transformedData = transformData(data);
 
             res.status(200).json(transformedData);
-            
+
         } catch (error) {
             console.error('Error fetching power data:', error);
             res.status(500).json({ error: 'Internal Server Error' });

@@ -1,7 +1,7 @@
 var db = require('../../config/db');
 const Solar = db.solar;
 const sequelize = db.sequelize
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 
 module.exports = {
 
@@ -42,7 +42,30 @@ module.exports = {
                 limit: 1, 
             });
 
-           // console.log(result_lastentry.hours_operated)
+            const result_power = await Solar.findOne({
+                attributes: [
+                  [
+                    sequelize.fn(
+                      'AVG',
+                      sequelize.literal(`
+                        (
+                          ("kW"->>'phase1')::float + 
+                          ("kW"->>'phase2')::float + 
+                          ("kW"->>'phase3')::float
+                        )
+                      `)
+                    ),
+                    'power_generated_yesterday'
+                  ]
+                ],
+                where: {
+                  createdAt: {
+                    [Op.gte]: sequelize.literal("CURRENT_DATE - INTERVAL '1 day'"), 
+                    [Op.lt]: sequelize.literal("CURRENT_DATE") 
+                  }
+                }
+              });
+              
         
             const solar = await Solar.findOne({
                 order: [['id', 'DESC']],  
@@ -57,8 +80,15 @@ module.exports = {
                 solar.dataValues.avg_hours_operated = result_lastentry.get('hours_operated');
             }
 
+            if(result_power){
+                solar.dataValues.power_generated_yesterday = result_power.get('power_generated_yesterday');
+            }
+
             await Solar.update(
-                { total_generation: Math.floor(result.get('avg_total_generations')) },  
+                { 
+                    total_generation: Math.floor(result.get('avg_total_generations')), 
+                    power_generated: Math.floor(result_power.get('power_generated_yesterday')) 
+                },  
                 { where: { id: solar.id } }  
             );
 

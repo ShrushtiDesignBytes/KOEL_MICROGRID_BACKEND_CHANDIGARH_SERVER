@@ -1,7 +1,7 @@
 var db = require('../../config/db');
 const Genset = db.genset;
 const sequelize = db.sequelize;
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 
 module.exports = {
 
@@ -11,7 +11,7 @@ module.exports = {
             const result = await Genset.findOne({
                 attributes: [
                     [
-                        sequelize.fn('AVG', 
+                        sequelize.fn('AVG',
                             sequelize.literal(`
                                 (
                                     ("kW"->>'phase1')::float + 
@@ -25,28 +25,72 @@ module.exports = {
                 ],
                 where: {
                     createdAt: {
-                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
-                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
                     }
                 }
             });
 
-             const result_lastentry = await Genset.findOne({
-                            attributes: ['hours_operated_yesterday'], 
-                            where: {
-                                createdAt: {
-                                    [Op.lte]: sequelize.literal('CURRENT_DATE'), 
-                                },
-                            },
-                            order: [['createdAt', 'DESC']], 
-                            limit: 1, 
-                        });
-            
-                     //   console.log(result_lastentry.hours_operated_yesterday)
-    
+            const result_lastentry = await Genset.findOne({
+                attributes: ['hours_operated_yesterday'],
+                where: {
+                    createdAt: {
+                        [Op.lte]: sequelize.literal('CURRENT_DATE'),
+                    },
+                },
+                order: [['createdAt', 'DESC']],
+                limit: 1,
+            });
+
+            const result_power = await Genset.findOne({
+                attributes: [
+                    [
+                        sequelize.fn(
+                            'AVG',
+                            sequelize.literal(`
+                                               (
+                                                 ("kW"->>'phase1')::float + 
+                                                 ("kW"->>'phase2')::float + 
+                                                 ("kW"->>'phase3')::float
+                                               )
+                                             `)
+                        ),
+                        'power_generated_yesterday'
+                    ]
+                ],
+                where: {
+                    createdAt: {
+                        [Op.gte]: sequelize.literal("CURRENT_DATE - INTERVAL '1 day'"),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE")
+                    }
+                }
+            });
+
+            const result_hours = await Genset.count({
+                where: {
+                    createdAt: {
+                        [Op.gte]: literal('CURRENT_DATE - INTERVAL \'1 day\''), // Start of the previous day
+                        [Op.lt]: literal('CURRENT_DATE') // End of the previous day
+                    },
+                    [Op.and]: [
+                        literal(`("kW"->>'phase1')::float > 0`),
+                        literal(`("kW"->>'phase2')::float > 0`),
+                        literal(`("kW"->>'phase3')::float > 0`)
+                    ]
+                }
+            });
+
+            const totalHours = result_hours / 60.0;
+            const hours = Math.floor(totalHours);
+
+            const minutesFraction = Math.round((totalHours - hours) * 60);
+            const minute = minutesFraction / 100
+
+            const formattedTime = hours + minute;
+
             const genset = await Genset.findOne({
-                order: [['id', 'DESC']],  
-                limit: 1                  
+                order: [['id', 'DESC']],
+                limit: 1
             });
 
             if (genset && result) {
@@ -56,6 +100,24 @@ module.exports = {
             // if(result_lastentry){
             //     genset.dataValues.avg_hours_operated = result_lastentry.get('hours_operated');
             // }
+
+            if (result_power) {
+                genset.dataValues.power_generated_yesterday = result_power.get('power_generated_yesterday');
+            }
+
+            if (result_hours) {
+                genset.dataValues.hours_operated_yesterday = formattedTime.toFixed(2);
+            }
+
+
+            await Genset.update(
+                {
+                    total_generation: Math.floor(result.get('avg_total_generations')),
+                    power_generated_yesterday: Math.floor(result_power.get('power_generated_yesterday')),
+                    hours_operated_yesterday: formattedTime.toFixed(2)
+                },
+                { where: { id: genset.id } }
+            );
 
             return res.status(200).send(
                 [genset]
@@ -131,7 +193,7 @@ module.exports = {
                                 v_voltagen: JSON.stringify(voltagen),
                                 v_current: JSON.stringify(current),
                                 v_tankCapacity: tankCapacity,
-                                v_operational: operational,  
+                                v_operational: operational,
                                 v_healthIndex: healthIndex,
                                 result_json: null
                             },
