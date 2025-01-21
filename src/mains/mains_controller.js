@@ -1,7 +1,7 @@
 var db = require('../../config/db');
 const Mains = db.mains;
 const sequelize = db.sequelize;
-const { Op, literal } = require('sequelize');
+const { Op, literal, col, fn } = require('sequelize');
 
 module.exports = {
 
@@ -55,21 +55,20 @@ module.exports = {
                 }
             });
 
-            const result_hours = await Mains.count({
-                where: {
-                    createdAt: {
-                        [Op.gte]: literal('CURRENT_DATE - INTERVAL \'1 day\''), // Start of the previous day
-                        [Op.lt]: literal('CURRENT_DATE') // End of the previous day
-                    },
-                    [Op.and]: [
-                        literal(`("kW"->>'phase1')::float > 0`),
-                        literal(`("kW"->>'phase2')::float > 0`),
-                        literal(`("kW"->>'phase3')::float > 0`)
-                    ]
-                }
-            });
+            const result_hours = await Mains.sequelize.query(
+                `SELECT 
+                COUNT(DISTINCT DATE_TRUNC('minute', "createdAt")) AS count 
+                FROM Main
+                WHERE "createdAt" >= CURRENT_DATE - INTERVAL '1 day'               
+                AND "createdAt" < CURRENT_DATE                                 
+                AND ("kW"->>'phase1')::float > 0                              
+                AND ("kW"->>'phase2')::float > 0                                
+                AND ("kW"->>'phase3')::float > 0;                                         
+              `,
+                { type: Mains.sequelize.QueryTypes.SELECT }
+            );
 
-            const totalHours = result_hours / 60.0;
+            const totalHours = result_hours[0].count / 60.0;
             const hours = Math.floor(totalHours);
 
             const minutesFraction = Math.round((totalHours - hours) * 60);
