@@ -27,28 +27,10 @@ module.exports = (sequelize, DataTypes) => {
         next_due: {
             type: DataTypes.STRING,
         },
-        notification_alarms: {
-            type: DataTypes.STRING,
-        },
         operating_hours: {
             type: DataTypes.STRING,
         },
         power_factor: {
-            type: DataTypes.STRING,
-        },
-        shutdown: {
-            type: DataTypes.STRING,
-        },
-        total_generation: {
-            type: DataTypes.STRING,
-        },
-        total_saving: {
-            type: DataTypes.STRING,
-        },
-        total_utilisation: {
-            type: DataTypes.STRING,
-        },
-        utilisation: {
             type: DataTypes.STRING,
         },
         voltagel: {
@@ -59,13 +41,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         hours_operated: {
             type: DataTypes.STRING,
-        },
-        power_generated: {
-            type: DataTypes.STRING,
-        },
-        daily_generation: {
-            type: DataTypes.STRING,
-        },
+        }
     },
         {
             freezeTableName: true,

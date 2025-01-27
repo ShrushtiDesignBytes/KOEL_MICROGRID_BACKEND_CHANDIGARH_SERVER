@@ -148,7 +148,7 @@ module.exports = {
             const createdMains = [];
 
             for (const mainsdata of mainsArray) {
-                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, notification_alarms, operating_hours, power_factor, shutdown, total_generation, total_saving, total_utilisation, utilisation, voltagel, voltagen, hours_operated, power_generated, daily_generation } = mainsdata;
+                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated } = mainsdata;
 
                 try {
                     const result = await sequelize.query(
@@ -160,19 +160,11 @@ module.exports = {
                             :v_kW,
                             :v_maintainance_last_date,
                             :v_next_due,
-                            :v_notification_alarms,
                             :v_operating_hours,
                             :v_power_factor,
-                            :v_shutdown,
-                            :v_total_generation,
-                            :v_total_saving,
-                            :v_total_utilisation,
-                            :v_utilisation,
                             :v_voltagel,
                             :v_voltagen,
                             :v_hours_operated,
-                            :v_power_generated,
-                            :v_daily_generation,
                             :result_json
                         )`, {
                         replacements: {
@@ -183,19 +175,11 @@ module.exports = {
                             v_kW: JSON.stringify(kW),
                             v_maintainance_last_date: maintainance_last_date,
                             v_next_due: next_due,
-                            v_notification_alarms: notification_alarms,
                             v_operating_hours: operating_hours,
                             v_power_factor: power_factor,
-                            v_shutdown: shutdown,
-                            v_total_generation: total_generation,
-                            v_total_saving: total_saving,
-                            v_total_utilisation: total_utilisation,
-                            v_utilisation: utilisation,
                             v_voltagel: JSON.stringify(voltagel),
                             v_voltagen: JSON.stringify(voltagen),
                             v_hours_operated: hours_operated,
-                            v_power_generated: power_generated,
-                            v_daily_generation: daily_generation,
                             result_json: null
                         },
                         type: sequelize.QueryTypes.RAW
@@ -207,7 +191,7 @@ module.exports = {
                     createdMains.push(data);
 
                 } catch (innerError) {
-                    createdMains.push({ error: `Failed to process data for mains: ${innerError.message}` });
+                    createdMains.push({ error: `Failed to process data for genset: ${innerError.message}` });
                 }
             }
             return res.status(200).send(createdMains);
