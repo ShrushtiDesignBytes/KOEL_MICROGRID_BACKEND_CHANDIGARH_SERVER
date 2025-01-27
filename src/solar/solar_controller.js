@@ -11,7 +11,7 @@ module.exports = {
             const result = await Solar.findOne({
                 attributes: [
                     [
-                        sequelize.fn('AVG', 
+                        sequelize.fn('AVG',
                             sequelize.literal(`
                                 (
                                     ("kW"->>'phase1')::float + 
@@ -25,75 +25,75 @@ module.exports = {
                 ],
                 where: {
                     createdAt: {
-                        [Op.gte]: sequelize.literal('CURRENT_DATE'), 
-                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'") 
+                        [Op.gte]: sequelize.literal('CURRENT_DATE'),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
                     }
                 }
             });
 
             const result_lastentry = await Solar.findOne({
-                attributes: ['hours_operated'], 
+                attributes: ['hours_operated'],
                 where: {
                     createdAt: {
-                        [Op.lte]: sequelize.literal('CURRENT_DATE'), 
+                        [Op.lte]: sequelize.literal('CURRENT_DATE'),
                     },
                 },
-                order: [['createdAt', 'DESC']], 
-                limit: 1, 
+                order: [['createdAt', 'DESC']],
+                limit: 1,
             });
 
             const result_power = await Solar.findOne({
                 attributes: [
-                  [
-                    sequelize.fn(
-                      'AVG',
-                      sequelize.literal(`
+                    [
+                        sequelize.fn(
+                            'AVG',
+                            sequelize.literal(`
                         (
                           ("kW"->>'phase1')::float + 
                           ("kW"->>'phase2')::float + 
                           ("kW"->>'phase3')::float
                         )
                       `)
-                    ),
-                    'power_generated_yesterday'
-                  ]
+                        ),
+                        'power_generated_yesterday'
+                    ]
                 ],
                 where: {
-                  createdAt: {
-                    [Op.gte]: sequelize.literal("CURRENT_DATE - INTERVAL '1 day'"), 
-                    [Op.lt]: sequelize.literal("CURRENT_DATE") 
-                  }
+                    createdAt: {
+                        [Op.gte]: sequelize.literal("CURRENT_DATE - INTERVAL '1 day'"),
+                        [Op.lt]: sequelize.literal("CURRENT_DATE")
+                    }
                 }
-              });
-              
-        
+            });
+
+
             const solar = await Solar.findOne({
-                order: [['id', 'DESC']],  
-                limit: 1                  
+                order: [['id', 'DESC']],
+                limit: 1
             });
 
             if (solar && result) {
                 solar.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
             }
 
-            if(result_lastentry){
+            if (result_lastentry) {
                 solar.dataValues.avg_hours_operated = result_lastentry.get('hours_operated');
             }
 
-            if(result_power){
+            if (result_power) {
                 solar.dataValues.power_generated_yesterday = result_power.get('power_generated_yesterday');
             }
 
             await Solar.update(
-                { 
-                    total_generation: Math.floor(result.get('avg_total_generations')), 
-                    power_generated: Math.floor(result_power.get('power_generated_yesterday')) 
-                },  
-                { where: { id: solar.id } }  
+                {
+                    total_generation: Math.floor(result.get('avg_total_generations')),
+                    power_generated: Math.floor(result_power.get('power_generated_yesterday'))
+                },
+                { where: { id: solar.id } }
             );
 
             return res.status(200).send(
-               [solar]
+                [solar]
             );
         } catch (error) {
             return res.status(400).send(
@@ -240,43 +240,50 @@ module.exports = {
     getChartData: async (req, res) => {
         try {
             const data = await Solar.sequelize.query(
-                `SELECT 
-                TO_CHAR("createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                    SUM(
-                            ("kW"->>'phase1')::NUMERIC + 
-                            ("kW"->>'phase2')::NUMERIC + 
-                            ("kW"->>'phase3')::NUMERIC
-                        ) AS totalPower,
-                    AVG(
-                            ("kW"->>'phase1')::NUMERIC + 
-                            ("kW"->>'phase2')::NUMERIC + 
-                            ("kW"->>'phase3')::NUMERIC
-                        ) AS averagePower
-                    FROM solar
-                    WHERE "createdAt" >= (
-                            -- Get 1 AM IST on the current day and convert to UTC
-                                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC'
-                                        )
-                    AND "createdAt" <= NOW() AT TIME ZONE 'UTC'
-                    GROUP BY hour
-                    ORDER BY hour;
-            
+                `WITH hours AS (
+                        SELECT 
+                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                        FROM generate_series(
+                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                            NOW() AT TIME ZONE 'UTC',
+                            INTERVAL '1 hour'
+                        ) AS generated_hour
+                    )
+                    SELECT 
+                    h.hour,
+                    COALESCE(SUM(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS totalPower,
+                    COALESCE(AVG(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS averagePower
+                    FROM hours h
+                    LEFT JOIN solar s ON 
+                        TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') = h.hour
+                    GROUP BY h.hour
+                    ORDER BY h.hour;
               `,
                 { type: Solar.sequelize.QueryTypes.SELECT }
             );
 
+            console.log(data)
+
             // Function to convert the data
             function transformData(rawData) {
                 return rawData.map(item => {
-                    
+
                     const hour = new Date(item.hour).getHours();
 
-                    const power = Math.floor(parseFloat(item.averagepower)); 
+                    const power = Math.floor(parseFloat(item.averagepower));
 
                     return {
                         hour: hour,
-                        power: power 
+                        power: power
                     };
                 });
             }

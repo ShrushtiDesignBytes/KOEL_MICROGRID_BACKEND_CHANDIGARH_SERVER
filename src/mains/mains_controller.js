@@ -273,28 +273,33 @@ module.exports = {
     getChartData: async (req, res) => {
         try {
             const data = await Mains.sequelize.query(
-                `SELECT 
-                TO_CHAR("createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                    SUM(
-                            ("kW"->>'phase1')::NUMERIC + 
-                            ("kW"->>'phase2')::NUMERIC + 
-                            ("kW"->>'phase3')::NUMERIC
-                        ) AS totalPower,
-                    AVG(
-                            ("kW"->>'phase1')::NUMERIC + 
-                            ("kW"->>'phase2')::NUMERIC + 
-                            ("kW"->>'phase3')::NUMERIC
-                        ) AS averagePower
-                    FROM main
-                    WHERE "createdAt" >= (
-                            -- Get 1 AM IST on the current day and convert to UTC
-                                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC'
-                                        )
-                    AND "createdAt" <= NOW() AT TIME ZONE 'UTC'
-                    GROUP BY hour
-                    ORDER BY hour;
-            
+               `WITH hours AS (
+                        SELECT 
+                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                        FROM generate_series(
+                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                            NOW() AT TIME ZONE 'UTC',
+                            INTERVAL '1 hour'
+                        ) AS generated_hour
+                    )
+                    SELECT 
+                    h.hour,
+                    COALESCE(SUM(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS totalPower,
+                    COALESCE(AVG(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS averagePower
+                    FROM hours h
+                    LEFT JOIN main s ON 
+                        TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') = h.hour
+                    GROUP BY h.hour
+                    ORDER BY h.hour;
               `,
                 { type: Mains.sequelize.QueryTypes.SELECT }
             );
