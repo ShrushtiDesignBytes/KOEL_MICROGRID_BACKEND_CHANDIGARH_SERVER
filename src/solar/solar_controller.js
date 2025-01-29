@@ -31,22 +31,27 @@ module.exports = {
                 }
             });
 
-            const result_total = await Solar.findOne({
-                attributes: [
-                    [
-                        sequelize.fn('AVG',
-                            sequelize.literal(`
-                                (
-                                    ("kW"->>'phase1')::float + 
-                                    ("kW"->>'phase2')::float + 
-                                    ("kW"->>'phase3')::float
-                                ) 
-                            `)
-                        ),
-                        'avg_total_generations'
-                    ]
-                ]
+            const result_total = await Mains.sequelize.query(`
+                SELECT 
+                    SUM(avg_daily_total_generations) AS total_generation
+                FROM (
+                    SELECT 
+                        DATE("createdAt") AS date,
+                        AVG(
+                            ("kW"->>'phase1')::float + 
+                            ("kW"->>'phase2')::float + 
+                            ("kW"->>'phase3')::float
+                        ) AS avg_daily_total_generations
+                    FROM 
+                        solar
+                    GROUP BY 
+                        DATE("createdAt")
+                ) AS daily_avg;
+            `, { 
+                type: sequelize.QueryTypes.SELECT 
             });
+
+            const total = result_total[0].total_generation;
 
             const result_lastentry = await Solar.findOne({
                 attributes: ['hours_operated'],
@@ -94,7 +99,7 @@ module.exports = {
             }
 
             if (result_total) {
-                solar.dataValues.avg_total_generation = Math.floor(result_total.get('avg_total_generations'));
+                solar.dataValues.avg_total_generation = Math.floor(total);
             }
 
             if (result_lastentry) {
