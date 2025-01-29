@@ -31,7 +31,7 @@ module.exports = {
                 }
             });
 
-            const result_total = await Mains.sequelize.query(`
+            const result_total = await Genset.sequelize.query(`
                 SELECT 
                     SUM(avg_daily_total_generations) AS total_generation
                 FROM (
