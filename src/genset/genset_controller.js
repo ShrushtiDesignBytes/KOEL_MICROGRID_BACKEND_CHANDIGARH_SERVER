@@ -87,31 +87,6 @@ module.exports = {
 
             const formattedTime = hours + minute;
 
-            const result_operating_hours = await Genset.sequelize.query(
-                `WITH phase1_zero_intervals AS (
-                    SELECT 
-                        "createdAt",
-                        LAG("createdAt") OVER (ORDER BY "createdAt") AS previous_time
-                    FROM genset
-                    WHERE (voltagel->>'phase1')::numeric = 0
-                ),
-                time_differences AS (
-                    SELECT 
-                        "createdAt",
-                        previous_time,
-                    EXTRACT(EPOCH FROM ("createdAt" - previous_time)) AS duration_in_seconds
-                    FROM phase1_zero_intervals
-                    WHERE previous_time IS NOT NULL
-                )
-                SELECT 
-                    SUM(duration_in_seconds) / 3600 AS total_operating_hours
-                FROM time_differences;                                      
-              `,
-                { type: Genset.sequelize.QueryTypes.SELECT }
-            );
-
-            const operating_time = result_operating_hours[0]?.total_operating_hours || 0;
-
 
             const genset = await Genset.findOne({
                 order: [['id', 'DESC']],
@@ -134,13 +109,9 @@ module.exports = {
                 genset.dataValues.hours_operated_yesterday = formattedTime.toFixed(2);
             }
 
-            if (result_operating_hours) {
-                genset.dataValues.operating_hours = parseFloat(operating_time).toFixed(2);
-            }
 
             await Genset.update(
                 {
-                    operating_hours: parseFloat(operating_time).toFixed(2),
                     hours_operated_yesterday: formattedTime.toFixed(2)
                 },
                 { where: { id: genset.id } }
