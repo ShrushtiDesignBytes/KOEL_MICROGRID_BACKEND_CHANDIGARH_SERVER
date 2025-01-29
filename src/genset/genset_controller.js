@@ -20,7 +20,7 @@ module.exports = {
                                 ) 
                             `)
                         ),
-                        'avg_total_generations'
+                        'avg_daily_total_generations'
                     ]
                 ],
                 where: {
@@ -30,6 +30,24 @@ module.exports = {
                     }
                 }
             });
+
+            const result_total = await Genset.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG',
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) 
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ]
+            });
+
 
             const result_lastentry = await Genset.findOne({
                 attributes: ['hours_operated_yesterday'],
@@ -94,7 +112,11 @@ module.exports = {
             });
 
             if (genset && result) {
-                genset.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+                genset.dataValues.avg_daily_total_generation = Math.floor(result.get('avg_daily_total_generations'));
+            }
+
+            if (result_total) {
+                genset.dataValues.avg_total_generation = Math.floor(result_total.get('avg_total_generations'));
             }
 
             // if(result_lastentry){

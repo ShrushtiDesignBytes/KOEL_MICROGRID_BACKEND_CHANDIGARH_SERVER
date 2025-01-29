@@ -20,7 +20,7 @@ module.exports = {
                                 ) 
                             `)
                         ),
-                        'avg_total_generations'
+                        'avg_daily_total_generations'
                     ]
                 ],
                 where: {
@@ -101,13 +101,34 @@ module.exports = {
 
             const operating_time = result_operating_hours[0]?.total_operating_hours || 0;
 
+            const result_total = await Mains.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG',
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) 
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ]
+            });
+
             const mains = await Mains.findOne({
                 order: [['id', 'DESC']],
                 limit: 1
             });
 
             if (mains && result) {
-                mains.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+                mains.dataValues.avg_daily_total_generation = Math.floor(result.get('avg_daily_total_generations'));
+            }
+
+            if (result_total) {
+                mains.dataValues.avg_total_generation = Math.floor(result_total.get('avg_total_generations'));
             }
 
             if (result_power) {

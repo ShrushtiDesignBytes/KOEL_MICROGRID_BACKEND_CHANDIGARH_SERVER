@@ -20,7 +20,7 @@ module.exports = {
                                 ) 
                             `)
                         ),
-                        'avg_total_generations'
+                        'avg_daily_total_generations'
                     ]
                 ],
                 where: {
@@ -29,6 +29,23 @@ module.exports = {
                         [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
                     }
                 }
+            });
+
+            const result_total = await Solar.findOne({
+                attributes: [
+                    [
+                        sequelize.fn('AVG',
+                            sequelize.literal(`
+                                (
+                                    ("kW"->>'phase1')::float + 
+                                    ("kW"->>'phase2')::float + 
+                                    ("kW"->>'phase3')::float
+                                ) 
+                            `)
+                        ),
+                        'avg_total_generations'
+                    ]
+                ]
             });
 
             const result_lastentry = await Solar.findOne({
@@ -73,7 +90,11 @@ module.exports = {
             });
 
             if (solar && result) {
-                solar.dataValues.avg_total_generation = Math.floor(result.get('avg_total_generations'));
+                solar.dataValues.avg_daily_total_generation = Math.floor(result.get('avg_daily_total_generations'));
+            }
+
+            if (result_total) {
+                solar.dataValues.avg_total_generation = Math.floor(result_total.get('avg_total_generations'));
             }
 
             if (result_lastentry) {
