@@ -8,28 +8,27 @@ module.exports = {
     //get all mains
     getMains: async (req, res) => {
         try {
-            const result = await Mains.findOne({
-                attributes: [
-                    [
-                        sequelize.fn('AVG',
-                            sequelize.literal(`
-                                (
-                                    ("kW"->>'phase1')::float + 
-                                    ("kW"->>'phase2')::float + 
-                                    ("kW"->>'phase3')::float
-                                ) 
-                            `)
-                        ),
-                        'avg_daily_total_generations'
-                    ]
-                ],
-                where: {
-                    createdAt: {
-                        [Op.gte]: sequelize.literal('CURRENT_DATE'),
-                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
-                    }
-                }
+            const result = await Mains.sequelize.query(`
+                WITH hourly_avg AS (
+                     SELECT 
+                     DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+                     AVG(
+                             (("kW"->>'phase1')::FLOAT + 
+                             ("kW"->>'phase2')::FLOAT + 
+                             ("kW"->>'phase3')::FLOAT)
+                         ) AS avg_kW_per_hour
+                     FROM main
+                     WHERE "createdAt" >= CURRENT_DATE
+                     AND "createdAt" < CURRENT_DATE + INTERVAL '1 day'
+                     GROUP BY hour
+                 )
+                 SELECT SUM(avg_kW_per_hour) AS avg_daily_total_generations FROM hourly_avg;
+ 
+             `, {
+                type: sequelize.QueryTypes.SELECT
             });
+
+            const daily_generation = result[0].avg_daily_total_generations;
 
             const result_power = await Mains.findOne({
                 attributes: [
@@ -101,7 +100,7 @@ module.exports = {
 
             const operating_time = result_operating_hours[0]?.total_operating_hours || 0;
 
-            const result_total =await Mains.sequelize.query(`
+            const result_total = await Mains.sequelize.query(`
                 SELECT 
                     SUM(avg_daily_total_generations) AS total_generation
                 FROM (
@@ -117,8 +116,8 @@ module.exports = {
                     GROUP BY 
                         DATE("createdAt")
                 ) AS daily_avg;
-            `, { 
-                type: sequelize.QueryTypes.SELECT 
+            `, {
+                type: sequelize.QueryTypes.SELECT
             });
 
             const total = result_total[0].total_generation;
@@ -129,7 +128,7 @@ module.exports = {
             });
 
             if (mains && result) {
-                mains.dataValues.avg_daily_total_generation = Math.floor(result.get('avg_daily_total_generations'));
+                mains.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
             }
 
             if (result_total) {
@@ -283,7 +282,7 @@ module.exports = {
     getChartData: async (req, res) => {
         try {
             const data = await Mains.sequelize.query(
-               `WITH hours AS (
+                `WITH hours AS (
                         SELECT 
                         TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
                         FROM generate_series(

@@ -8,28 +8,27 @@ module.exports = {
     //get all solar
     getSolar: async (req, res) => {
         try {
-            const result = await Solar.findOne({
-                attributes: [
-                    [
-                        sequelize.fn('AVG',
-                            sequelize.literal(`
-                                (
-                                    ("kW"->>'phase1')::float + 
-                                    ("kW"->>'phase2')::float + 
-                                    ("kW"->>'phase3')::float
-                                ) 
-                            `)
-                        ),
-                        'avg_daily_total_generations'
-                    ]
-                ],
-                where: {
-                    createdAt: {
-                        [Op.gte]: sequelize.literal('CURRENT_DATE'),
-                        [Op.lt]: sequelize.literal("CURRENT_DATE + INTERVAL '1 day'")
-                    }
-                }
+            const result = await Solar.sequelize.query(`
+               WITH hourly_avg AS (
+                    SELECT 
+                    DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+                    AVG(
+                            (("kW"->>'phase1')::FLOAT + 
+                            ("kW"->>'phase2')::FLOAT + 
+                            ("kW"->>'phase3')::FLOAT)
+                        ) AS avg_kW_per_hour
+                    FROM Solar
+                    WHERE "createdAt" >= CURRENT_DATE
+                    AND "createdAt" < CURRENT_DATE + INTERVAL '1 day'
+                    GROUP BY hour
+                )
+                SELECT SUM(avg_kW_per_hour) AS avg_daily_total_generations FROM hourly_avg;
+
+            `, {
+                type: sequelize.QueryTypes.SELECT
             });
+
+            const daily_generation = result[0].avg_daily_total_generations;
 
             const result_total = await Solar.sequelize.query(`
                 SELECT 
@@ -47,8 +46,8 @@ module.exports = {
                     GROUP BY 
                         DATE("createdAt")
                 ) AS daily_avg;
-            `, { 
-                type: sequelize.QueryTypes.SELECT 
+            `, {
+                type: sequelize.QueryTypes.SELECT
             });
 
             const total = result_total[0].total_generation;
@@ -95,7 +94,7 @@ module.exports = {
             });
 
             if (solar && result) {
-                solar.dataValues.avg_daily_total_generation = Math.floor(result.get('avg_daily_total_generations'));
+                solar.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
             }
 
             if (result_total) {
@@ -112,7 +111,7 @@ module.exports = {
 
             await Solar.update(
                 {
-                    total_generation: Math.floor(result.get('avg_total_generations')),
+                    total_generation: Math.floor(total),
                     power_generated: Math.floor(result_power.get('power_generated_yesterday'))
                 },
                 { where: { id: solar.id } }
