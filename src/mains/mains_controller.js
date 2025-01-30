@@ -101,21 +101,26 @@ module.exports = {
             const operating_time = result_operating_hours[0]?.total_operating_hours || 0;
 
             const result_total = await Mains.sequelize.query(`
-                SELECT 
-                    SUM(avg_daily_total_generations) AS total_generation
-                FROM (
+                WITH hourly_avg AS (
                     SELECT 
-                        DATE("createdAt") AS date,
-                        AVG(
-                            ("kW"->>'phase1')::float + 
-                            ("kW"->>'phase2')::float + 
-                            ("kW"->>'phase3')::float
-                        ) AS avg_daily_total_generations
+                    DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,  -- Truncate to the hour with IST adjustment
+                    AVG(
+                            (("kW"->>'phase1')::FLOAT + 
+                            ("kW"->>'phase2')::FLOAT + 
+                            ("kW"->>'phase3')::FLOAT)
+                        ) AS avg_kW_per_hour  -- Calculate the average kW per hour
                     FROM 
-                        main
+                    main
+                    WHERE 
+                        "createdAt" >= (SELECT MIN("createdAt") FROM Solar)  -- Start from the earliest available data
+                        AND "createdAt" <= CURRENT_TIMESTAMP  -- Until current time
                     GROUP BY 
-                        DATE("createdAt")
-                ) AS daily_avg;
+                        hour  -- Group by the truncated hour
+                    )
+                    SELECT 
+                        SUM(avg_kW_per_hour) AS total_generation  -- Sum of all hourly averages
+                    FROM 
+                    hourly_avg;
             `, {
                 type: sequelize.QueryTypes.SELECT
             });
