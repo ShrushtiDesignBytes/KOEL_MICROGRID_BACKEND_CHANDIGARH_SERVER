@@ -51,8 +51,8 @@ module.exports = {
                         SUM(avg_kW_per_hour) AS total_generation  -- Sum of all hourly averages
                     FROM 
                     hourly_avg;
-            `, { 
-                type: sequelize.QueryTypes.SELECT 
+            `, {
+                type: sequelize.QueryTypes.SELECT
             });
 
             const total = result_total[0].total_generation;
@@ -69,7 +69,7 @@ module.exports = {
                 limit: 1,
             });
 
-            const result_power =  await Genset.sequelize.query(`
+            const result_power = await Genset.sequelize.query(`
                 WITH hourly_avg AS (
                     SELECT 
                     DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
@@ -87,10 +87,10 @@ module.exports = {
                 FROM hourly_avg;
  
              `, {
-                 type: sequelize.QueryTypes.SELECT
-             });
- 
-             const power_generation_yesterday = result_power[0].power_generations_yesterday;
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_yesterday = result_power[0].power_generations_yesterday;
 
             const result_hours = await Genset.sequelize.query(
                 `SELECT 
@@ -114,9 +114,36 @@ module.exports = {
             const formattedTime = hours + minute;
 
 
+            const result_power_before = await Genset.sequelize.query(`
+                                       WITH hourly_avg AS (
+                                           SELECT 
+                                           DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+                                           AVG(
+                                                   (("kW"->>'phase1')::FLOAT + 
+                                                   ("kW"->>'phase2')::FLOAT + 
+                                                   ("kW"->>'phase3')::FLOAT)
+                                               ) AS avg_kW_per_hour
+                                           FROM genset
+                                           WHERE "createdAt" >= CURRENT_DATE - INTERVAL '2 day'  -- Filter for yesterday's data
+                                            AND "createdAt" < CURRENT_DATE - INTERVAL '1 day'  -- Exclude today's data
+                                           GROUP BY hour
+                                       )
+                                       SELECT SUM(avg_kW_per_hour) AS power_generations_yesterday 
+                                       FROM hourly_avg;
+                                    `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_before_yesterday = result_power_before[0].power_generations_yesterday;
+
             const genset = await Genset.findOne({
-                order: [['id', 'DESC']],
-                limit: 1
+                where: {
+                    operating_hours: {
+                        [Op.ne]: null,
+                        [Op.ne]: ''
+                    },
+                },
+                order: [['createdAt', 'DESC']]
             });
 
             if (genset && result) {
@@ -133,6 +160,10 @@ module.exports = {
 
             if (result_power) {
                 genset.dataValues.power_generated_yesterday = power_generation_yesterday;
+            }
+
+            if (result_power_before) {
+                genset.dataValues.power_generated_before_yesterday = power_generation_before_yesterday;
             }
 
             if (result_hours) {

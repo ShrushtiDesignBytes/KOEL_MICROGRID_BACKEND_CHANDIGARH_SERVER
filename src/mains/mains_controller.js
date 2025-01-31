@@ -30,7 +30,7 @@ module.exports = {
 
             const daily_generation = result[0].avg_daily_total_generations;
 
-            const result_power =  await Mains.sequelize.query(`
+            const result_power = await Mains.sequelize.query(`
                 WITH hourly_avg AS (
                     SELECT 
                     DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
@@ -48,10 +48,10 @@ module.exports = {
                 FROM hourly_avg;
  
              `, {
-                 type: sequelize.QueryTypes.SELECT
-             });
- 
-             const power_generation_yesterday = result_power[0].power_generations_yesterday;
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_yesterday = result_power[0].power_generations_yesterday;
 
             const result_hours = await Mains.sequelize.query(
                 `SELECT 
@@ -126,6 +126,28 @@ module.exports = {
 
             const total = result_total[0].total_generation;
 
+            const result_power_before = await Mains.sequelize.query(`
+                           WITH hourly_avg AS (
+                               SELECT 
+                               DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+                               AVG(
+                                       (("kW"->>'phase1')::FLOAT + 
+                                       ("kW"->>'phase2')::FLOAT + 
+                                       ("kW"->>'phase3')::FLOAT)
+                                   ) AS avg_kW_per_hour
+                               FROM main
+                               WHERE "createdAt" >= CURRENT_DATE - INTERVAL '2 day'  -- Filter for yesterday's data
+                                AND "createdAt" < CURRENT_DATE - INTERVAL '1 day'  -- Exclude today's data
+                               GROUP BY hour
+                           )
+                           SELECT SUM(avg_kW_per_hour) AS power_generations_yesterday 
+                           FROM hourly_avg;
+                        `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_before_yesterday = result_power_before[0].power_generations_yesterday;
+
             const mains = await Mains.findOne({
                 order: [['id', 'DESC']],
                 limit: 1
@@ -141,6 +163,10 @@ module.exports = {
 
             if (result_power) {
                 mains.dataValues.power_generated_yesterday = power_generation_yesterday;
+            }
+
+            if (result_power) {
+                mains.dataValues.power_generated_before_yesterday = power_generation_before_yesterday;
             }
 
             if (result_hours) {

@@ -70,7 +70,7 @@ module.exports = {
                 limit: 1,
             });
 
-            const result_power =  await Solar.sequelize.query(`
+            const result_power = await Solar.sequelize.query(`
                 WITH hourly_avg AS (
                     SELECT 
                     DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
@@ -88,15 +88,48 @@ module.exports = {
                 FROM hourly_avg;
  
              `, {
-                 type: sequelize.QueryTypes.SELECT
-             });
- 
-             const power_generation_yesterday = result_power[0].power_generations_yesterday;
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_yesterday = result_power[0].power_generations_yesterday;
+
+            const result_power_before = await Solar.sequelize.query(`
+                WITH hourly_avg AS (
+                    SELECT 
+                    DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+                    AVG(
+                            (("kW"->>'phase1')::FLOAT + 
+                            ("kW"->>'phase2')::FLOAT + 
+                            ("kW"->>'phase3')::FLOAT)
+                        ) AS avg_kW_per_hour
+                    FROM Solar
+                    WHERE "createdAt" >= CURRENT_DATE - INTERVAL '2 day'  -- Filter for yesterday's data
+                     AND "createdAt" < CURRENT_DATE - INTERVAL '1 day'  -- Exclude today's data
+                    GROUP BY hour
+                )
+                SELECT SUM(avg_kW_per_hour) AS power_generations_yesterday 
+                FROM hourly_avg;
+             `, {
+                type: sequelize.QueryTypes.SELECT
+            });
+
+            const power_generation_before_yesterday = result_power_before[0].power_generations_yesterday;
 
             const solar = await Solar.findOne({
-                order: [['id', 'DESC']],
-                limit: 1
+                where: {
+                   
+                    operating_hours: {
+                        [Op.ne]: null,
+                        [Op.ne]: ''
+                    },
+                    hours_operated: {
+                        [Op.ne]: null,
+                        [Op.ne]: ''
+                    }
+                },
+                order: [['createdAt', 'DESC']]
             });
+
 
             if (solar && result) {
                 solar.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
@@ -112,6 +145,10 @@ module.exports = {
 
             if (result_power) {
                 solar.dataValues.power_generated_yesterday = power_generation_yesterday;
+            }
+
+            if (result_power_before) {
+                solar.dataValues.power_generated_before_yesterday = power_generation_before_yesterday;
             }
 
             await Solar.update(
@@ -285,7 +322,7 @@ module.exports = {
                 { type: Solar.sequelize.QueryTypes.SELECT }
             );
 
-            console.log(data)
+            //console.log(data)
 
             // Function to convert the data
             function transformData(rawData) {
