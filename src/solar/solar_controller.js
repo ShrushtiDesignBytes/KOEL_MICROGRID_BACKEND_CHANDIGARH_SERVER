@@ -65,6 +65,10 @@ module.exports = {
                     createdAt: {
                         [Op.lte]: sequelize.literal('CURRENT_DATE'),
                     },
+                    hours_operated: {
+                        [Op.ne]: null,
+                        [Op.ne]: ''
+                    }
                 },
                 order: [['createdAt', 'DESC']],
                 limit: 1,
