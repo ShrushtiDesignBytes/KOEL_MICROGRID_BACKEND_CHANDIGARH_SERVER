@@ -6,6 +6,9 @@ const router = express.Router();
 //get all Overview
 router.get('/', getGenset);
 
+//get all Overview
+router.get('/chart', getChartData);
+
 //add Overview
 router.post('/', createGenset) 
 
@@ -18,9 +21,6 @@ router.delete('/:id', deleteGenset)
 //Overview update
 router.patch('/:id',  updateGenset)
 
-
-//get all Overview
-router.get('/chart', getChartData);
 
 
 module.exports = router;
