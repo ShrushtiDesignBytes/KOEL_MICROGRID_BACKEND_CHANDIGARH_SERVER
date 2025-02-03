@@ -325,5 +325,63 @@ module.exports = {
                 error.message
             );
         }
+    },
+    getChartData: async (req, res) => {
+        try {
+            const data = await Genset.sequelize.query(
+                `WITH hours AS (
+                        SELECT 
+                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                        FROM generate_series(
+                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                            NOW() AT TIME ZONE 'UTC',
+                            INTERVAL '1 hour'
+                        ) AS generated_hour
+                    )
+                    SELECT 
+                    h.hour,
+                    COALESCE(SUM(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS totalPower,
+                    COALESCE(AVG(
+                        ("kW"->>'phase1')::NUMERIC + 
+                        ("kW"->>'phase2')::NUMERIC + 
+                        ("kW"->>'phase3')::NUMERIC
+                    ), 0) AS averagePower
+                    FROM hours h
+                    LEFT JOIN genset s ON 
+                        TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') = h.hour
+                    GROUP BY h.hour
+                    ORDER BY h.hour;
+              `,
+                { type: Genset.sequelize.QueryTypes.SELECT }
+            );
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+                    const hour = new Date(item.hour).getHours();
+
+                    const power = Math.floor(parseFloat(item.averagepower));
+
+                    return {
+                        hour: hour,
+                        power: power
+                    };
+                });
+            }
+
+
+            const transformedData = transformData(data);
+
+            res.status(200).json(transformedData);
+
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
     }
 }

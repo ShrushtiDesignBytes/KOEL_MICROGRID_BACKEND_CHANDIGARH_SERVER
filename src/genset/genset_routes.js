@@ -1,5 +1,5 @@
 const express = require('express');
-const { getGenset, createGenset, viewGenset, deleteGenset, updateGenset } = require('./genset_controller.js');
+const { getGenset, createGenset, viewGenset, deleteGenset, updateGenset, getChartData } = require('./genset_controller.js');
 
 const router = express.Router();
 
@@ -17,5 +17,10 @@ router.delete('/:id', deleteGenset)
 
 //Overview update
 router.patch('/:id',  updateGenset)
+
+
+//get all Overview
+router.get('/chart', getChartData);
+
 
 module.exports = router;
