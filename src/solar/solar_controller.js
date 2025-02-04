@@ -175,57 +175,86 @@ module.exports = {
 
     //add solar
     createSolar: async (req, res) => {
-        const solarArray = req.body
+        const solarArray = req.body  
 
         try {
             const createdSolar = []
 
             for (const solardata of solarArray) {
+                
                 const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated } = solardata;
-                try {
-                    const result = await sequelize.query(
-                        `CALL insert_unique_solar(
-                        :v_breaker_status,
-                        :v_frequency,
-                        :v_current,
-                        :v_kVA,
-                        :v_kW,
-                        :v_maintainance_last_date,
-                        :v_next_due,
-                        :v_operating_hours,
-                        :v_power_factor,
-                        :v_voltagel,
-                        :v_voltagen,
-                        :v_hours_operated,
-                        :result_json
-                    )`, {
-                        replacements: {
-                            v_breaker_status: breaker_status,
-                            v_frequency: frequency,
-                            v_current: JSON.stringify(current),
-                            v_kVA: JSON.stringify(kVA),
-                            v_kW: JSON.stringify(kW),
-                            v_maintainance_last_date: maintainance_last_date,
-                            v_next_due: next_due,
-                            v_operating_hours: operating_hours,
-                            v_power_factor: power_factor,
-                            v_voltagel: JSON.stringify(voltagel),
-                            v_voltagen: JSON.stringify(voltagen),
-                            v_hours_operated: hours_operated,
-                            result_json: null
-                        },
-                        type: sequelize.QueryTypes.RAW
+
+                const { id, ...filteredData } = solardata;
+
+                //console.log('data', filteredData)
+
+                const localID =  await Solar.findOne({
+                    where: {
+                        localId: id
                     }
-                    );
+                });
 
-                    const solar = result[0][0].result_json;
+                //console.log(localID)
 
-                    const data = solar === null ? 'Already saved same data in database' : solar;
-                    createdSolar.push(data);
-
-                } catch (innerError) {
-                    createdSolar.push({ error: `Failed to process data for solar: ${innerError.message}` });
-                }
+                if (localID !== null) {
+                    await Solar.update( filteredData ,
+                        {
+                            where: {
+                                localId: id
+                            }
+                        });
+                    
+                    createdSolar.push('Updated Succesfully')
+                } else {
+                    //console.log(solardata.id)
+                    try {
+                        const result = await sequelize.query(
+                            `CALL insert_unique_solar(
+                            :v_breaker_status,
+                            :v_frequency,
+                            :v_current,
+                            :v_kVA,
+                            :v_kW,
+                            :v_maintainance_last_date,
+                            :v_next_due,
+                            :v_operating_hours,
+                            :v_power_factor,
+                            :v_voltagel,
+                            :v_voltagen,
+                            :v_hours_operated,
+                            :v_localId,
+                            :result_json
+                        )`, {
+                            replacements: {
+                                v_breaker_status: breaker_status,
+                                v_frequency: frequency,
+                                v_current: JSON.stringify(current),
+                                v_kVA: JSON.stringify(kVA),
+                                v_kW: JSON.stringify(kW),
+                                v_maintainance_last_date: maintainance_last_date,
+                                v_next_due: next_due,
+                                v_operating_hours: operating_hours,
+                                v_power_factor: power_factor,
+                                v_voltagel: JSON.stringify(voltagel),
+                                v_voltagen: JSON.stringify(voltagen),
+                                v_hours_operated: hours_operated,
+                                v_localId: id,
+                                result_json: null
+                            },
+                            type: sequelize.QueryTypes.RAW
+                        }
+                        );
+    
+                        const solar = result[0][0].result_json;
+    
+                        const data = solar === null ? 'Already saved same data in database' : solar;
+                        createdSolar.push(data);
+    
+                    } catch (innerError) {
+                        createdSolar.push({ error: `Failed to process data for solar: ${innerError.message}` });
+                    }
+                }   
+                
             }
 
             return res.status(200).send(createdSolar);
