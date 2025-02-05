@@ -40,6 +40,9 @@ module.exports = (sequelize, DataTypes) => {
         },
         hours_operated: {
             type: DataTypes.STRING,
+        },
+        localId: {
+            type: DataTypes.INTEGER
         }
     },
         {

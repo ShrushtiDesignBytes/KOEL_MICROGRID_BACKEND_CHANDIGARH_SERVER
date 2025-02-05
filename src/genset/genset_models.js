@@ -79,6 +79,9 @@ module.exports = (sequelize, DataTypes) => {
         },
         healthIndex: {
             type: DataTypes.STRING,
+        },
+        localId: {
+            type: DataTypes.INTEGER
         }
     },
         {

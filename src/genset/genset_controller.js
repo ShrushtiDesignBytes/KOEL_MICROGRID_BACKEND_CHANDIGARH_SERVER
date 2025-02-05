@@ -197,9 +197,31 @@ module.exports = {
             for (const gensetdata of gensetArray) {
                 const { coolant_temp, frequency, battery_charged, oil_pressure, hours_operated_yesterday, utilisation_factor, power_factor, power_generated_yesterday, critical_load, non_critical_load, fuel_level, operating_hours, total_generation, total_saving, total_consumption, maintainance_last_date, next_maintainance_date, kVA, kW, voltagel, voltagen, current, tankCapacity, operational, healthIndex } = gensetdata;
 
-                try {
-                    const result = await sequelize.query(
-                        `CALL insert_unique_genset(
+                const { id, ...filteredData } = gensetdata;
+
+                //console.log('data', filteredData)
+
+                const localID = await Genset.findOne({
+                    where: {
+                        localId: id
+                    }
+                });
+
+                //console.log(localID)
+
+                if (localID !== null) {
+                    await Genset.update(filteredData,
+                        {
+                            where: {
+                                localId: id
+                            }
+                        });
+
+                    createdGenset.push('Updated Succesfully')
+                } else {
+                    try {
+                        const result = await sequelize.query(
+                            `CALL insert_unique_genset(
                             :v_coolant_temp,
                             :v_frequency,
                             :v_battery_charged,
@@ -225,46 +247,49 @@ module.exports = {
                             :v_tankCapacity, 
                             :v_operational,                        
                             :v_healthIndex,
+                            :v_localId,
                             :result_json
                         )`,
-                        {
-                            replacements: {
-                                v_coolant_temp: coolant_temp,
-                                v_frequency: frequency,
-                                v_battery_charged: battery_charged,
-                                v_oil_pressure: oil_pressure,
-                                v_hours_operated_yesterday: hours_operated_yesterday,
-                                v_utilisation_factor: utilisation_factor,
-                                v_power_factor: power_factor,
-                                v_power_generated_yesterday: power_generated_yesterday,
-                                v_critical_load: critical_load,
-                                v_non_critical_load: non_critical_load,
-                                v_fuel_level: fuel_level,
-                                v_operating_hours: operating_hours,
-                                v_total_generation: total_generation,
-                                v_total_saving: total_saving,
-                                v_total_consumption: total_consumption,
-                                v_maintainance_last_date: maintainance_last_date,
-                                v_next_maintainance_date: next_maintainance_date,
-                                v_kVA: JSON.stringify(kVA),
-                                v_kW: JSON.stringify(kW),
-                                v_voltagel: JSON.stringify(voltagel),
-                                v_voltagen: JSON.stringify(voltagen),
-                                v_current: JSON.stringify(current),
-                                v_tankCapacity: tankCapacity,
-                                v_operational: operational,
-                                v_healthIndex: healthIndex,
-                                result_json: null
-                            },
-                            type: sequelize.QueryTypes.RAW
-                        });
-                    const genset = result[0][0].result_json;
+                            {
+                                replacements: {
+                                    v_coolant_temp: coolant_temp,
+                                    v_frequency: frequency,
+                                    v_battery_charged: battery_charged,
+                                    v_oil_pressure: oil_pressure,
+                                    v_hours_operated_yesterday: hours_operated_yesterday,
+                                    v_utilisation_factor: utilisation_factor,
+                                    v_power_factor: power_factor,
+                                    v_power_generated_yesterday: power_generated_yesterday,
+                                    v_critical_load: critical_load,
+                                    v_non_critical_load: non_critical_load,
+                                    v_fuel_level: fuel_level,
+                                    v_operating_hours: operating_hours,
+                                    v_total_generation: total_generation,
+                                    v_total_saving: total_saving,
+                                    v_total_consumption: total_consumption,
+                                    v_maintainance_last_date: maintainance_last_date,
+                                    v_next_maintainance_date: next_maintainance_date,
+                                    v_kVA: JSON.stringify(kVA),
+                                    v_kW: JSON.stringify(kW),
+                                    v_voltagel: JSON.stringify(voltagel),
+                                    v_voltagen: JSON.stringify(voltagen),
+                                    v_current: JSON.stringify(current),
+                                    v_tankCapacity: tankCapacity,
+                                    v_operational: operational,
+                                    v_healthIndex: healthIndex,
+                                    v_localId: id,
+                                    result_json: null
+                                },
+                                type: sequelize.QueryTypes.RAW
+                            });
+                        const genset = result[0][0].result_json;
 
-                    const data = genset === null ? 'Already saved same data in database' : genset;
-                    createdGenset.push(data);
+                        const data = genset === null ? 'Already saved same data in database' : genset;
+                        createdGenset.push(data);
 
-                } catch (innerError) {
-                    createdGenset.push({ error: `Failed to process data for genset: ${innerError.message}` });
+                    } catch (innerError) {
+                        createdGenset.push({ error: `Failed to process data for genset: ${innerError.message}` });
+                    }
                 }
             }
             return res.status(200).send(createdGenset);
@@ -373,7 +398,7 @@ module.exports = {
                     };
                 });
             }
-            
+
 
             const transformedData = transformData(data);
 

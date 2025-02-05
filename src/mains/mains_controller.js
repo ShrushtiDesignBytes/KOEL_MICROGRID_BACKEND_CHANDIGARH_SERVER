@@ -205,9 +205,31 @@ module.exports = {
             for (const mainsdata of mainsArray) {
                 const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated } = mainsdata;
 
-                try {
-                    const result = await sequelize.query(
-                        `CALL insert_unique_mains(
+                const { id, ...filteredData } = mainsdata;
+
+                //console.log('data', filteredData)
+
+                const localID = await Mains.findOne({
+                    where: {
+                        localId: id
+                    }
+                });
+
+                //console.log(localID)
+
+                if (localID !== null) {
+                    await Mains.update(filteredData,
+                        {
+                            where: {
+                                localId: id
+                            }
+                        });
+
+                    createdMains.push('Updated Succesfully')
+                } else {
+                    try {
+                        const result = await sequelize.query(
+                            `CALL insert_unique_mains(
                             :v_breaker_status,
                             :v_frequency,
                             :v_current,
@@ -220,33 +242,36 @@ module.exports = {
                             :v_voltagel,
                             :v_voltagen,
                             :v_hours_operated,
+                            :v_localId,
                             :result_json
                         )`, {
-                        replacements: {
-                            v_breaker_status: breaker_status,
-                            v_frequency: frequency,
-                            v_current: JSON.stringify(current),
-                            v_kVA: JSON.stringify(kVA),
-                            v_kW: JSON.stringify(kW),
-                            v_maintainance_last_date: maintainance_last_date,
-                            v_next_due: next_due,
-                            v_operating_hours: operating_hours,
-                            v_power_factor: power_factor,
-                            v_voltagel: JSON.stringify(voltagel),
-                            v_voltagen: JSON.stringify(voltagen),
-                            v_hours_operated: hours_operated,
-                            result_json: null
-                        },
-                        type: sequelize.QueryTypes.RAW
-                    });
+                            replacements: {
+                                v_breaker_status: breaker_status,
+                                v_frequency: frequency,
+                                v_current: JSON.stringify(current),
+                                v_kVA: JSON.stringify(kVA),
+                                v_kW: JSON.stringify(kW),
+                                v_maintainance_last_date: maintainance_last_date,
+                                v_next_due: next_due,
+                                v_operating_hours: operating_hours,
+                                v_power_factor: power_factor,
+                                v_voltagel: JSON.stringify(voltagel),
+                                v_voltagen: JSON.stringify(voltagen),
+                                v_hours_operated: hours_operated,
+                                v_localId: id,
+                                result_json: null
+                            },
+                            type: sequelize.QueryTypes.RAW
+                        });
 
-                    const mains = result[0][0].result_json;
+                        const mains = result[0][0].result_json;
 
-                    const data = mains === null ? 'Already saved same data in database' : mains;
-                    createdMains.push(data);
+                        const data = mains === null ? 'Already saved same data in database' : mains;
+                        createdMains.push(data);
 
-                } catch (innerError) {
-                    createdMains.push({ error: `Failed to process data for genset: ${innerError.message}` });
+                    } catch (innerError) {
+                        createdMains.push({ error: `Failed to process data for genset: ${innerError.message}` });
+                    }
                 }
             }
             return res.status(200).send(createdMains);
