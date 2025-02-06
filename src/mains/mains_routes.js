@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', getMains);
 
 //get all Overview
-router.get('/chart', getChartData);
+router.post('/chart', getChartData);
 
 //add Overview
 router.post('/', createMains) 

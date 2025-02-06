@@ -353,37 +353,41 @@ module.exports = {
     },
     getChartData: async (req, res) => {
         try {
+            const { fromDate, toDate } = req.body;
+
             const data = await Genset.sequelize.query(
-                `WITH hours AS (
-                        SELECT 
-                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
-                        FROM generate_series(
-                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
-                            NOW() AT TIME ZONE 'UTC',
-                            INTERVAL '1 hour'
-                        ) AS generated_hour
-                    )
+                `
+                WITH hours AS (
                     SELECT 
+                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                    FROM generate_series(
+                        (DATE_TRUNC('day', ${fromDate ? `'${fromDate}'` : 'NOW()'} AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                        AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                        ${toDate ? `'${toDate}'` : 'NOW()'} AT TIME ZONE 'UTC',
+                        INTERVAL '1 hour'
+                    ) AS generated_hour
+                )
+                SELECT 
                     h.hour,
                     COALESCE(SUM(
-                        ("kW"->>'phase1')::NUMERIC + 
-                        ("kW"->>'phase2')::NUMERIC + 
-                        ("kW"->>'phase3')::NUMERIC
+                        GREATEST(("kW"->>'phase1')::NUMERIC, 0) + 
+                        GREATEST(("kW"->>'phase2')::NUMERIC, 0) + 
+                        GREATEST(("kW"->>'phase3')::NUMERIC, 0)
                     ), 0) AS totalPower,
                     COALESCE(AVG(
-                        ("kW"->>'phase1')::NUMERIC + 
-                        ("kW"->>'phase2')::NUMERIC + 
-                        ("kW"->>'phase3')::NUMERIC
+                        GREATEST(("kW"->>'phase1')::NUMERIC, 0) + 
+                        GREATEST(("kW"->>'phase2')::NUMERIC, 0) + 
+                        GREATEST(("kW"->>'phase3')::NUMERIC, 0)
                     ), 0) AS averagePower
-                    FROM hours h
-                    LEFT JOIN genset s ON 
-                        TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') = h.hour
-                    GROUP BY h.hour
-                    ORDER BY h.hour;
-              `,
+                FROM hours h
+                LEFT JOIN genset s 
+                    ON TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') = h.hour
+                GROUP BY h.hour
+                ORDER BY h.hour;
+                `,
                 { type: Genset.sequelize.QueryTypes.SELECT }
             );
+            
 
             // Function to convert the data
             function transformData(rawData) {

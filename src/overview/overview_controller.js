@@ -140,8 +140,20 @@ async function fetchData() {
     try {
         // Fetch solar and mains data concurrently
         const [solarResponse, mainsResponse] = await Promise.all([
-            fetch(`${BASEURL}/solar/chart`),
-            fetch(`${BASEURL}/mains/chart`),
+            fetch(`${BASEURL}/solar/chart`, {
+                method: 'POST', 
+                headers: {
+                    'Content-Type': 'application/json', 
+                },
+                body: JSON.stringify({}), 
+            }),
+            fetch(`${BASEURL}/mains/chart`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+            }),
         ]);
 
         if (!solarResponse.ok || !mainsResponse.ok) {

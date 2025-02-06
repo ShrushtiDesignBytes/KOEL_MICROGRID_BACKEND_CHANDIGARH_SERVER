@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', getSolar);
 
 //get all Overview
-router.get('/chart', getChartData);
+router.post('/chart', getChartData);
 
 //add Overview
 router.post('/', createSolar) 
