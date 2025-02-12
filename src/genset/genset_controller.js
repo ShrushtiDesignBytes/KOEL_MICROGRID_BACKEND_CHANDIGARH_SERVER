@@ -195,7 +195,7 @@ module.exports = {
         try {
             const createdGenset = [];
             for (const gensetdata of gensetArray) {
-                const { coolant_temp, frequency, battery_charged, oil_pressure, hours_operated_yesterday, utilisation_factor, power_factor, power_generated_yesterday, critical_load, non_critical_load, fuel_level, operating_hours, total_generation, total_saving, total_consumption, maintainance_last_date, next_maintainance_date, kVA, kW, voltagel, voltagen, current, tankCapacity, operational, healthIndex } = gensetdata;
+                const { coolant_temp, frequency, battery_charged, oil_pressure, hours_operated_yesterday, utilisation_factor, power_factor, power_generated_yesterday, critical_load, non_critical_load, fuel_level, operating_hours, total_generation, total_saving, total_consumption, maintainance_last_date, next_maintainance_date, kVA, kW, voltagel, voltagen, current, tankCapacity, operational, healthIndex, kwh, unit_generated } = gensetdata;
 
                 const { id, ...filteredData } = gensetdata;
 
@@ -248,6 +248,8 @@ module.exports = {
                             :v_operational,                        
                             :v_healthIndex,
                             :v_localId,
+                            :v_kwh,
+                            :v_unit_generated,
                             :result_json
                         )`,
                             {
@@ -278,6 +280,8 @@ module.exports = {
                                     v_operational: operational,
                                     v_healthIndex: healthIndex,
                                     v_localId: id,
+                                    v_kwh: kwh,
+                                    v_unit_generated: unit_generated,
                                     result_json: null
                                 },
                                 type: sequelize.QueryTypes.RAW
@@ -387,7 +391,7 @@ module.exports = {
                 `,
                 { type: Genset.sequelize.QueryTypes.SELECT }
             );
-            
+
 
             // Function to convert the data
             function transformData(rawData) {

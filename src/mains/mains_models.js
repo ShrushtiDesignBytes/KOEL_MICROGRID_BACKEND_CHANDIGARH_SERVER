@@ -43,6 +43,12 @@ module.exports = (sequelize, DataTypes) => {
         },
         localId: {
             type: DataTypes.INTEGER
+        },
+        kwh: {
+            type: DataTypes.INTEGER
+        },
+        unit_generated: {
+            type: DataTypes.INTEGER
         }
     },
         {

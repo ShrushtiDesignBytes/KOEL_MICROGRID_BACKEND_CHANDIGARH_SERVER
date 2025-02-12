@@ -182,7 +182,7 @@ module.exports = {
 
             for (const solardata of solarArray) {
                 
-                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated } = solardata;
+                const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated, kwh, unit_generated } = solardata;
 
                 const { id, ...filteredData } = solardata;
 
@@ -223,6 +223,8 @@ module.exports = {
                             :v_voltagen,
                             :v_hours_operated,
                             :v_localId,
+                            :v_kwh,
+                            :v_unit_generated,
                             :result_json
                         )`, {
                             replacements: {
@@ -239,6 +241,8 @@ module.exports = {
                                 v_voltagen: JSON.stringify(voltagen),
                                 v_hours_operated: hours_operated,
                                 v_localId: id,
+                                v_kwh: kwh,
+                                v_unit_generated: unit_generated,
                                 result_json: null
                             },
                             type: sequelize.QueryTypes.RAW
