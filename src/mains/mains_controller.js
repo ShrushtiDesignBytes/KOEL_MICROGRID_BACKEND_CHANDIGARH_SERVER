@@ -111,7 +111,7 @@ module.exports = {
                     FROM 
                     main
                     WHERE 
-                        "createdAt" >= (SELECT MIN("createdAt") FROM Solar)  -- Start from the earliest available data
+                        "createdAt" >= (SELECT MIN("createdAt") FROM Main)  -- Start from the earliest available data
                         AND "createdAt" <= CURRENT_TIMESTAMP  -- Until current time
                     GROUP BY 
                         hour  -- Group by the truncated hour
@@ -388,6 +388,74 @@ module.exports = {
                 });
             }
 
+
+            const transformedData = transformData(data);
+
+            res.status(200).json(transformedData);
+
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    excelData: async (req, res) => {
+        try {
+            const { fromDate, toDate } = req.body;
+
+            const data = await Mains.sequelize.query(
+                `WITH hours AS (
+                     -- Generate hourly timestamps within the given date range
+                    SELECT 
+                    TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                    FROM generate_series(
+                        (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                        AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                        NOW() AT TIME ZONE 'UTC',
+                        INTERVAL '1 hour'
+                    ) AS generated_hour
+                )
+
+            , power_data AS (
+                -- Aggregate power data per hour
+                SELECT 
+                TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+                MAX(s.unit_generated) AS unit_generated,  -- Get the maximum unit_generated per hour
+                MAX(s.kwh) AS kwh         -- Get the latest kWh_reading per hour
+                FROM main s
+                GROUP BY hour
+            )
+
+            SELECT 
+            h.hour,
+            COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per hour
+            COALESCE(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour), 0) AS kwh_reading -- Compute difference between consecutive kWh readings
+            FROM hours h
+            LEFT JOIN power_data p ON h.hour = p.hour
+            ORDER BY h.hour;
+
+        `,
+                { type: Mains.sequelize.QueryTypes.SELECT }
+            );
+
+            //console.log(data)
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+
+                    const hour = new Date(item.hour).getHours();
+
+                    const kwh_reading = item.kwh_reading;
+                    const unit_generation = item.unit_generation
+
+                    return {
+                        hour: hour,
+                        kwh_reading: kwh_reading,
+                        unit_generation: unit_generation
+                    };
+                });
+            }
 
             const transformedData = transformData(data);
 

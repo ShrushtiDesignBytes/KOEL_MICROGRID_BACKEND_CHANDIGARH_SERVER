@@ -1,5 +1,5 @@
 const express = require('express');
-const { getMains, createMains, viewMains, deleteMains, updateMains, getChartData } = require('./mains_controller.js');
+const { getMains, createMains, viewMains, deleteMains, updateMains, getChartData, excelData } = require('./mains_controller.js');
 
 const router = express.Router();
 
@@ -8,6 +8,9 @@ router.get('/', getMains);
 
 //get all Overview
 router.post('/chart', getChartData);
+
+//get all Overview
+router.get('/excel', excelData);
 
 //add Overview
 router.post('/', createMains) 

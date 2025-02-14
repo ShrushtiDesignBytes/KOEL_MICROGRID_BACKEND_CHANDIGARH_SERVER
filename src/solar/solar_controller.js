@@ -121,7 +121,7 @@ module.exports = {
 
             const solar = await Solar.findOne({
                 where: {
-                   
+
                     operating_hours: {
                         [Op.ne]: null,
                         [Op.ne]: ''
@@ -175,20 +175,20 @@ module.exports = {
 
     //add solar
     createSolar: async (req, res) => {
-        const solarArray = req.body  
+        const solarArray = req.body
 
         try {
             const createdSolar = []
 
             for (const solardata of solarArray) {
-                
+
                 const { breaker_status, frequency, current, kVA, kW, maintainance_last_date, next_due, operating_hours, power_factor, voltagel, voltagen, hours_operated, kwh, unit_generated } = solardata;
 
                 const { id, ...filteredData } = solardata;
 
                 //console.log('data', filteredData)
 
-                const localID =  await Solar.findOne({
+                const localID = await Solar.findOne({
                     where: {
                         localId: id
                     }
@@ -197,13 +197,13 @@ module.exports = {
                 //console.log(localID)
 
                 if (localID !== null) {
-                    await Solar.update( filteredData ,
+                    await Solar.update(filteredData,
                         {
                             where: {
                                 localId: id
                             }
                         });
-                    
+
                     createdSolar.push('Updated Succesfully')
                 } else {
                     //console.log(solardata.id)
@@ -248,17 +248,17 @@ module.exports = {
                             type: sequelize.QueryTypes.RAW
                         }
                         );
-    
+
                         const solar = result[0][0].result_json;
-    
+
                         const data = solar === null ? 'Already saved same data in database' : solar;
                         createdSolar.push(data);
-    
+
                     } catch (innerError) {
                         createdSolar.push({ error: `Failed to process data for solar: ${innerError.message}` });
                     }
-                }   
-                
+                }
+
             }
 
             return res.status(200).send(createdSolar);
@@ -328,7 +328,7 @@ module.exports = {
     getChartData: async (req, res) => {
         try {
             const { fromDate, toDate } = req.body;
-            
+
             const data = await Solar.sequelize.query(
                 `WITH hours AS (
                         SELECT 
@@ -374,6 +374,74 @@ module.exports = {
                     return {
                         hour: hour,
                         power: power
+                    };
+                });
+            }
+
+            const transformedData = transformData(data);
+
+            res.status(200).json(transformedData);
+
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    },
+
+    excelData: async (req, res) => {
+        try {
+            const { fromDate, toDate } = req.body;
+
+            const data = await Solar.sequelize.query(
+                `WITH hours AS (
+                     -- Generate hourly timestamps within the given date range
+                    SELECT 
+                    TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                    FROM generate_series(
+                        (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                        AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                        NOW() AT TIME ZONE 'UTC',
+                        INTERVAL '1 hour'
+                    ) AS generated_hour
+                )
+
+            , power_data AS (
+                -- Aggregate power data per hour
+                SELECT 
+                TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+                MAX(s.unit_generated) AS unit_generated,  -- Get the maximum unit_generated per hour
+                MAX(s.kwh) AS kwh         -- Get the latest kWh_reading per hour
+                FROM solar s
+                GROUP BY hour
+            )
+
+            SELECT 
+            h.hour,
+            COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per hour
+            COALESCE(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour), 0) AS kwh_reading -- Compute difference between consecutive kWh readings
+            FROM hours h
+            LEFT JOIN power_data p ON h.hour = p.hour
+            ORDER BY h.hour;
+
+        `,
+                { type: Solar.sequelize.QueryTypes.SELECT }
+            );
+
+            //console.log(data)
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+
+                    const hour = new Date(item.hour).getHours();
+
+                    const kwh_reading = item.kwh_reading;
+                    const unit_generation = item.unit_generation
+
+                    return {
+                        hour: hour,
+                        kwh_reading: kwh_reading,
+                        unit_generation: unit_generation
                     };
                 });
             }

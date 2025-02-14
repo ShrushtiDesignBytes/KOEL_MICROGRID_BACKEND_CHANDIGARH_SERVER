@@ -140,20 +140,8 @@ async function fetchData() {
     try {
         // Fetch solar and mains data concurrently
         const [solarResponse, mainsResponse] = await Promise.all([
-            fetch(`${BASEURL}/solar/chart`, {
-                method: 'POST', 
-                headers: {
-                    'Content-Type': 'application/json', 
-                },
-                body: JSON.stringify({}), 
-            }),
-            fetch(`${BASEURL}/mains/chart`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({}),
-            }),
+            fetch(`${BASEURL}/solar/excel`),
+            fetch(`${BASEURL}/mains/excel`),
         ]);
 
         if (!solarResponse.ok || !mainsResponse.ok) {
@@ -163,7 +151,7 @@ async function fetchData() {
         const solarData = await solarResponse.json();
         const mainsData = await mainsResponse.json();
 
-       // console.log(solarData, mainsData)
+        console.log(solarData, mainsData)
 
         return { solarData, mainsData };
     } catch (error) {
@@ -177,16 +165,16 @@ function calculateAveragePower(solar, mains) {
     const combined = {};
 
     // Sum up power values for each hour from solar
-    solar.forEach(({ hour, power }) => {
+    solar.forEach(({ hour, kwh_reading }) => {
         if (!combined[hour]) combined[hour] = { solarSum: 0, solarCount: 0, mainsSum: 0, mainsCount: 0 };
-        combined[hour].solarSum += power;
+        combined[hour].solarSum += kwh_reading;
         combined[hour].solarCount += 1;
     });
 
     // Sum up power values for each hour from mains
-    mains.forEach(({ hour, power }) => {
+    mains.forEach(({ hour, kwh_reading }) => {
         if (!combined[hour]) combined[hour] = { solarSum: 0, solarCount: 0, mainsSum: 0, mainsCount: 0 };
-        combined[hour].mainsSum += power;
+        combined[hour].mainsSum += kwh_reading;
         combined[hour].mainsCount += 1;
     });
 
@@ -197,7 +185,7 @@ function calculateAveragePower(solar, mains) {
         const mainsAvg = data.mainsCount > 0 ? data.mainsSum / data.mainsCount : 0;
         return {
             hour: parseInt(hour),
-            power: (solarAvg + mainsAvg) / 2
+            kwh_reading: (solarAvg + mainsAvg) / 2
         };
     });
 
