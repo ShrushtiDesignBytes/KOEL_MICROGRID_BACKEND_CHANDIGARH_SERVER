@@ -150,13 +150,13 @@ module.exports = {
                 where: {
                     kwh: {
                         [Op.ne]: null,
-                        [Op.ne]: 0  
+                        [Op.ne]: 0
                     }
                 },
                 order: [['createdAt', 'DESC']]
             });
 
-            if(kwh) {
+            if (kwh) {
                 genset.dataValues.kwh = kwh.dataValues.kwh;
             }
 
@@ -431,41 +431,40 @@ module.exports = {
             res.status(500).json({ error: 'Internal Server Error' });
         }
     },
-     
+
     excelData: async (req, res) => {
         try {
             const { fromDate, toDate } = req.body;
 
             const data = await Genset.sequelize.query(
                 `WITH hours AS (
-                     -- Generate hourly timestamps within the given date range
+                    -- Generate hourly timestamps within the given date range
                     SELECT 
-                    TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
-                    FROM generate_series(
-                        (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                        AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
-                        NOW() AT TIME ZONE 'UTC',
-                        INTERVAL '1 hour'
-                    ) AS generated_hour
-                )
+                        TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+                        FROM generate_series(
+                            (DATE_TRUNC('day', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
+                            AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                            NOW() AT TIME ZONE 'UTC',
+                            INTERVAL '1 hour'
+                        ) AS generated_hour
+                    ),
+                    power_data AS (
+                        -- Aggregate power data per hour
+                        SELECT 
+                        TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+                        MAX(s.unit_generated) AS unit_generated,  -- Get the maximum unit_generated per hour
+                        MAX(s.kwh) AS kwh         -- Get the latest kWh_reading per hour
+                        FROM genset s
+                        GROUP BY hour
+                    )
+                    SELECT 
+                    h.hour,
+                    COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per hour
+                    COALESCE(ABS(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour)), 0) AS kwh_reading -- Ensure positive kWh difference
+                    FROM hours h
+                    LEFT JOIN power_data p ON h.hour = p.hour
+                    ORDER BY h.hour;
 
-            , power_data AS (
-                -- Aggregate power data per hour
-                SELECT 
-                TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                MAX(s.unit_generated) AS unit_generated,  -- Get the maximum unit_generated per hour
-                MAX(s.kwh) AS kwh         -- Get the latest kWh_reading per hour
-                FROM genset s
-                GROUP BY hour
-            )
-
-            SELECT 
-            h.hour,
-            COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per hour
-            COALESCE(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour), 0) AS kwh_reading -- Compute difference between consecutive kWh readings
-            FROM hours h
-            LEFT JOIN power_data p ON h.hour = p.hour
-            ORDER BY h.hour;
 
         `,
                 { type: Genset.sequelize.QueryTypes.SELECT }
