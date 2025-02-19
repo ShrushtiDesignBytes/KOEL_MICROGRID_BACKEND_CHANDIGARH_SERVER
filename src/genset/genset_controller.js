@@ -142,6 +142,10 @@ module.exports = {
                         [Op.ne]: null,
                         [Op.ne]: ''
                     },
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: ''
+                    },
                 },
                 order: [['createdAt', 'DESC']]
             });

@@ -185,7 +185,7 @@ function calculateAveragePower(solar, mains) {
         const mainsAvg = data.mainsCount > 0 ? data.mainsSum / data.mainsCount : 0;
         return {
             hour: parseInt(hour),
-            kwh_reading: (solarAvg + mainsAvg) / 2
+            kwh_reading: solarAvg + mainsAvg
         };
     });
 
