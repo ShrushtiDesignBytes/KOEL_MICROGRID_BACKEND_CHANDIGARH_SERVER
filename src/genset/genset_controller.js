@@ -141,7 +141,13 @@ module.exports = {
                     operating_hours: {
                         [Op.ne]: null,
                         [Op.ne]: ''
-                    },
+                    }
+                },
+                order: [['createdAt', 'DESC']]
+            });
+
+            const kwh = await Genset.findOne({
+                where: {
                     kwh: {
                         [Op.ne]: null,
                         [Op.ne]: 0  
@@ -149,6 +155,10 @@ module.exports = {
                 },
                 order: [['createdAt', 'DESC']]
             });
+
+            if(kwh) {
+                genset.dataValues.kwh = kwh.dataValues.kwh;
+            }
 
             if (genset && result) {
                 genset.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
