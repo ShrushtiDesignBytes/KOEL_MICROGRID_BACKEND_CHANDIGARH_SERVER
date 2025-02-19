@@ -153,6 +153,24 @@ module.exports = {
                 limit: 1
             });
 
+            const kwh = await Mains.findOne({
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                order: [['createdAt', 'DESC']]
+            });
+
+            if (kwh) {
+                mains.dataValues.kwh = kwh.dataValues.kwh;
+            }
+
+            if(mains.dataValues.breaker_status === null){
+                mains.dataValues.breaker_status = 'OFF'
+            }
+
             if (mains && result) {
                 mains.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
             }

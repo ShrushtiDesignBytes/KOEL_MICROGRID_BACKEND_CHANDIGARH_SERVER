@@ -134,6 +134,25 @@ module.exports = {
                 order: [['createdAt', 'DESC']]
             });
 
+            const kwh = await Solar.findOne({
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                order: [['createdAt', 'DESC']]
+            });
+
+            if (kwh) {
+                solar.dataValues.kwh = kwh.dataValues.kwh;
+            }
+
+            if (solar.dataValues.breaker_status === null) {
+                solar.dataValues.breaker_status = 'OFF'
+            }
+
+
 
             if (solar && result) {
                 solar.dataValues.avg_daily_total_generation = Math.floor(daily_generation);
