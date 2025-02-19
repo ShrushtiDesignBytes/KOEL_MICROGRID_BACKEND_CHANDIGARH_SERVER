@@ -141,6 +141,10 @@ module.exports = {
                     operating_hours: {
                         [Op.ne]: null,
                         [Op.ne]: ''
+                    },
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0  
                     }
                 },
                 order: [['createdAt', 'DESC']]
