@@ -1,5 +1,5 @@
 const express = require('express');
-const { getGenset, createGenset, viewGenset, deleteGenset, updateGenset, getChartData, excelData } = require('./genset_controller.js');
+const { getGenset, createGenset, viewGenset, deleteGenset, updateGenset, reportData, excelData } = require('./genset_controller.js');
 
 const router = express.Router();
 
@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', getGenset);
 
 //get all Overview
-router.post('/chart', getChartData);
+router.post('/report', reportData);
 
 //get all Overview
 router.get('/excel', excelData);

@@ -1,5 +1,5 @@
 const express = require('express');
-const { getSolar, createSolar, viewSolar, deleteSolar, updateSolar, getChartData, excelData } = require('./solar_controller.js');
+const { getSolar, createSolar, viewSolar, deleteSolar, updateSolar, reportData, excelData } = require('./solar_controller.js');
 
 const router = express.Router();
 
@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', getSolar);
 
 //get all Overview
-router.post('/chart', getChartData);
+router.post('/report', reportData);
 
 //get all Overview
 router.get('/excel', excelData);

@@ -1,5 +1,5 @@
 const express = require('express');
-const { getMains, createMains, viewMains, deleteMains, updateMains, getChartData, excelData } = require('./mains_controller.js');
+const { getMains, createMains, viewMains, deleteMains, updateMains, reportData, excelData } = require('./mains_controller.js');
 
 const router = express.Router();
 
@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', getMains);
 
 //get all Overview
-router.post('/chart', getChartData);
+router.post('/report', reportData);
 
 //get all Overview
 router.get('/excel', excelData);

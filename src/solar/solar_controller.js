@@ -473,5 +473,87 @@ module.exports = {
             console.error('Error fetching power data:', error);
             res.status(500).json({ error: 'Internal Server Error' });
         }
+    },
+
+    reportData: async (req, res) => {
+        try {
+            const { fromDate, toDate } = req.body;
+
+            const data = await Solar.sequelize.query(
+        `WITH minutes AS (
+                -- Generate 5-minute timestamps within the given date range
+        SELECT 
+            TO_CHAR(generated_minute + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:MI:00') AS minute
+            FROM generate_series(
+                (DATE_TRUNC('day', ${fromDate ? `'${fromDate}'` : 'NOW()'} AT TIME ZONE 'Asia/Kolkata') + INTERVAL '5 minutes') 
+                AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
+                ${toDate ? `'${toDate}'` : 'NOW()'} AT TIME ZONE 'UTC',
+                INTERVAL '5 minutes'
+            ) AS generated_minute
+        ),
+
+        power_data AS (
+        -- Aggregate power data per 5-minute interval
+        SELECT 
+            TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:MI:00') AS minute,
+            MAX(s.unit_generated) AS unit_generated,  -- Get the maximum unit_generated per 5 minutes
+            MAX(s.kwh) AS kwh  -- Get the latest kWh_reading per 5 minutes
+            FROM solar s
+            GROUP BY minute
+        )
+
+        SELECT 
+        m.minute,
+            COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per 5 minutes
+            CASE 
+        WHEN (
+            (LAG(p.unit_generated) OVER (ORDER BY m.minute) = 0 AND p.unit_generated > 0) 
+            OR 
+            (LAG(p.unit_generated) OVER (ORDER BY m.minute) > 0 AND p.unit_generated = 0)
+        )
+        THEN 0
+        ELSE COALESCE(ABS(p.kwh - LAG(p.kwh) OVER (ORDER BY m.minute)), 0)
+    END AS kwh_reading
+        FROM minutes m
+        LEFT JOIN power_data p ON m.minute = p.minute
+        ORDER BY m.minute;
+`,
+                { type: Solar.sequelize.QueryTypes.SELECT }
+            );
+
+            //console.log(data)
+
+            // Function to convert the data
+            function transformData(rawData) {
+                return rawData.map(item => {
+                    const extractDate = (timestamp) => {
+                        return timestamp.split(' ')[0]; // Splits by space and takes the date part
+                    };
+                    
+                    const date = extractDate(item.minute);
+                    const hour = new Date(item.minute).getHours();
+                    const minute = new Date(item.minute).getMinutes().toString().padStart(2, '0');
+                    const amPm = hour >= 12 ? 'PM' : 'AM';
+                    const kwh_reading = item.kwh_reading;
+                    const unit_generation = item.unit_generation
+
+                    return {
+                        date: date,
+                        minute: `${hour}:${minute} ${amPm}`,
+                        kwh_reading: kwh_reading,
+                        unit_generation: unit_generation
+                    };
+                });
+            }
+
+            const transformedData = transformData(data);
+
+            res.status(200).json(transformedData);
+
+        } catch (error) {
+            console.error('Error fetching power data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
     }
+
 }
