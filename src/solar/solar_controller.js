@@ -435,9 +435,17 @@ module.exports = {
             )
 
             SELECT 
-            h.hour,
-            COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per hour
-            COALESCE(ABS(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour)), 0) AS kwh_reading -- Compute difference between consecutive kWh readings
+                h.hour,
+                    COALESCE(p.unit_generated, 0) AS unit_generation, -- Take the maximum per 5 minutes
+                    CASE 
+                WHEN (
+                    (LAG(p.unit_generated) OVER (ORDER BY h.hour) = 0 AND p.unit_generated > 0) 
+                    OR 
+                    (LAG(p.unit_generated) OVER (ORDER BY h.hour) > 0 AND p.unit_generated = 0)
+                )
+                THEN 0
+                ELSE COALESCE(ABS(p.kwh - LAG(p.kwh) OVER (ORDER BY h.hour)), 0)
+                END AS kwh_reading
             FROM hours h
             LEFT JOIN power_data p ON h.hour = p.hour
             ORDER BY h.hour;
