@@ -275,10 +275,58 @@ savings_data AS(
             --Step 5: Calculate total savings
 SELECT SUM(savings) AS total_savings FROM savings_data;`
 
-                        
-                                        , {
+
+                , {
+                    type: Sequelize.QueryTypes.SELECT,
+                });
+
+            const average = await Solar.sequelize.query(`WITH hourly_avg AS (
+    -- Combine Solar, Main, Genset hourly averages
+    SELECT 
+        TO_CHAR("createdAt" + INTERVAL '5 hours 30 minutes', 'Dy') AS day,
+        DATE_TRUNC('hour', "createdAt" + INTERVAL '5 hours 30 minutes') AS hour,
+        AVG(
+            (("kW"->>'phase1')::FLOAT + 
+             ("kW"->>'phase2')::FLOAT + 
+             ("kW"->>'phase3')::FLOAT)
+        ) AS avg_kW_per_hour,
+        CASE 
+            -- Define "last week" from previous Sunday's start to this past Saturday
+            WHEN "createdAt" >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day' - INTERVAL '7 days'
+                 AND "createdAt" < DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day'
+            THEN 'last_week'
+            
+            -- Define "current week" from this Sunday's start to now
+            WHEN "createdAt" >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day'
+                 AND "createdAt" <= CURRENT_TIMESTAMP
+            THEN 'current_week'
+        END AS week_category
+        FROM (
+        SELECT "createdAt", "kW" FROM Solar
+        UNION ALL
+        SELECT "createdAt", "kW" FROM Main
+        UNION ALL
+        SELECT "createdAt", "kW" FROM Genset
+        ) combined_sources
+        WHERE "createdAt" >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day' - INTERVAL '7 days'
+            AND "createdAt" <= CURRENT_TIMESTAMP
+        GROUP BY day, hour, week_category
+    )
+
+    -- Calculate total power generation for last week and current week (up to today)
+        SELECT 
+            day,
+            ROUND(SUM(CASE WHEN week_category = 'last_week' THEN avg_kW_per_hour ELSE 0 END)::numeric, 2) AS "lastWeek",
+            ROUND(SUM(CASE WHEN week_category = 'current_week' THEN avg_kW_per_hour ELSE 0 END)::numeric, 2) AS "thisWeek"
+            FROM hourly_avg
+            GROUP BY day
+            ORDER BY ARRAY_POSITION(ARRAY['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], day);
+
+        `, {
                 type: Sequelize.QueryTypes.SELECT,
             });
+
+            console.log(average)
 
             const s_m_permonth = result[0].total_savings;
             const s_m_tillmonth = result_3[0].total_savings;
@@ -295,7 +343,8 @@ SELECT SUM(savings) AS total_savings FROM savings_data;`
                 s_m_permonth,
                 s_m_tillmonth,
                 s_g_permonth,
-                s_g_tillmonth
+                s_g_tillmonth,
+                average
             });
         } catch (error) {
             return res.status(400).send(
