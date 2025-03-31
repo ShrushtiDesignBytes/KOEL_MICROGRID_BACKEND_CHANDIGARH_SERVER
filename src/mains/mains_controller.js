@@ -163,6 +163,34 @@ module.exports = {
                 order: [['createdAt', 'DESC']]
             });
 
+            const firstRow = await Mains.findOne({
+                order: [['id', 'ASC']],
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                attributes: ['kwh'],
+            });
+
+            const lastRow = await Mains.findOne({
+                order: [['id', 'DESC']],
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                attributes: ['kwh'],
+            });
+
+
+            if (firstRow && lastRow) {
+                const kwhDifference = lastRow.kwh - firstRow.kwh;
+                mains.dataValues.kwh_diff = kwhDifference;
+            }
+
             if (kwh) {
                 mains.dataValues.kwh = kwh.dataValues.kwh;
             }

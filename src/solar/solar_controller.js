@@ -144,6 +144,34 @@ module.exports = {
                 order: [['createdAt', 'DESC']]
             });
 
+            const firstRow = await Solar.findOne({
+                order: [['id', 'ASC']],
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                attributes: ['kwh'],
+            });
+
+            const lastRow = await Solar.findOne({
+                order: [['id', 'DESC']],
+                where: {
+                    kwh: {
+                        [Op.ne]: null,
+                        [Op.ne]: 0
+                    }
+                },
+                attributes: ['kwh'],
+            });
+
+
+            if (firstRow && lastRow) {
+                const kwhDifference = lastRow.kwh - firstRow.kwh;
+                solar.dataValues.kwh_diff = kwhDifference;
+            }
+
             if (kwh) {
                 solar.dataValues.kwh = kwh.dataValues.kwh;
             }
@@ -488,7 +516,7 @@ module.exports = {
             const { fromDate, toDate } = req.body;
 
             const data = await Solar.sequelize.query(
-        `WITH minutes AS (
+                `WITH minutes AS (
                 -- Generate 5-minute timestamps within the given date range
         SELECT 
             TO_CHAR(generated_minute + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:MI:00') AS minute
@@ -537,7 +565,7 @@ module.exports = {
                     const extractDate = (timestamp) => {
                         return timestamp.split(' ')[0]; // Splits by space and takes the date part
                     };
-                    
+
                     const date = extractDate(item.minute);
                     const hour = new Date(item.minute).getHours();
                     const minute = new Date(item.minute).getMinutes().toString().padStart(2, '0');
