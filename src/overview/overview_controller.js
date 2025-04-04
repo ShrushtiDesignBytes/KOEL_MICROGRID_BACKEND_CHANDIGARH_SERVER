@@ -148,16 +148,15 @@ module.exports = {
                 type: Sequelize.QueryTypes.SELECT,
             });
 
-            const result_3 = await Solar.sequelize.query(`-- Step 1: Get the earliest timestamp efficiently with indexed MIN()
-                    WITH min_dates AS (
-                    SELECT LEAST(
-                        (SELECT MIN(s."createdAt") FROM solar s),
-                        (SELECT MIN(m."createdAt") FROM main m)
-                    ) AS start_date
-                ),
+            const result_3 = await Solar.sequelize.query(`
+WITH min_dates AS (
+    SELECT LEAST(
+        (SELECT MIN(s."createdAt") FROM solar s),
+        (SELECT MIN(m."createdAt") FROM main m)
+    ) AS start_date
+),
 
-                -- Step 2: Generate timestamps more efficiently (limit the range to data points only)
-        hours AS (
+hours AS (
     SELECT 
         TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
     FROM min_dates,
@@ -168,7 +167,7 @@ module.exports = {
     ) AS generated_hour
 ),
 
--- Step 3: Aggregate data with fewer rows
+
 solar_data AS (
     SELECT 
         TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
@@ -177,104 +176,107 @@ solar_data AS (
     FROM solar s
     WHERE s."createdAt" >= (SELECT start_date FROM min_dates)
     GROUP BY hour
-), 
+    HAVING MAX(s.kwh) > 0
+),
 
-mains_data AS (
+main_data AS (
     SELECT 
         TO_CHAR(m."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
         MAX(m.unit_generated) AS mains_unit_generated,
-        MAX(m.kwh) AS mains_kwh  
+        MAX(m.kwh) AS main_kwh  
     FROM main m
     WHERE m."createdAt" >= (SELECT start_date FROM min_dates)
     GROUP BY hour
+    HAVING MAX(m.kwh) > 0
 ),
 
-            -- Step 4: Calculate savings (with improved LAG performance)
-            savings_data AS (
-            SELECT 
-            h.hour,
-            COALESCE(
+savings_data AS (
+    SELECT 
+        h.hour,
+        s.solar_kwh,
+        m.main_kwh,
+        COALESCE(
             CASE 
-                WHEN COALESCE(s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER (ORDER BY h.hour), 0) > 0 
-                 AND COALESCE(m.mains_kwh - LAG(m.mains_kwh, 1, m.mains_kwh) OVER (ORDER BY h.hour), 0) > 0 
-                THEN (s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER (ORDER BY h.hour)) * 6.6
+                WHEN COALESCE(s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER(ORDER BY h.hour), 0) > 0 
+                 AND COALESCE(m.main_kwh - LAG(m.main_kwh, 1, m.main_kwh) OVER(ORDER BY h.hour), 0) > 0 
+                THEN (s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER(ORDER BY h.hour)) * 6.6
                 ELSE 0
             END, 0
-            ) AS savings
-        FROM hours h
-        LEFT JOIN solar_data s ON h.hour = s.hour
-        LEFT JOIN mains_data m ON h.hour = m.hour
-        )
+        ) AS savings
+    FROM hours h
+    LEFT JOIN solar_data s ON h.hour = s.hour
+    LEFT JOIN main_data m ON h.hour = m.hour
+)
 
-                        -- Step 5: Calculate total savings
-                        SELECT SUM(savings) AS total_savings FROM savings_data;
-
-                        
+SELECT 
+    SUM(savings) AS total_savings
+FROM savings_data;
                                         `, {
                 type: Sequelize.QueryTypes.SELECT,
             });
 
-            const result_4 = await Solar.sequelize.query(`--Step 1: Get the earliest timestamp efficiently with indexed MIN()
-WITH min_dates AS(
-                SELECT LEAST(
-                    (SELECT MIN(s."createdAt") FROM solar s),
-                (SELECT MIN(m."createdAt") FROM genset m)
+            const result_4 = await Solar.sequelize.query(`
+WITH min_dates AS (
+    SELECT LEAST(
+        (SELECT MIN(s."createdAt") FROM solar s),
+        (SELECT MIN(m."createdAt") FROM genset m)
     ) AS start_date
 ),
 
-            --Step 2: Generate timestamps more efficiently(limit the range to data points only)
-hours AS(
-                SELECT 
+hours AS (
+    SELECT 
         TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
     FROM min_dates,
-                generate_series(
-                    min_dates.start_date,
-                    NOW() AT TIME ZONE 'UTC',
-                    INTERVAL '1 hour'
-                ) AS generated_hour
-            ),
+    generate_series(
+        min_dates.start_date,
+        NOW() AT TIME ZONE 'UTC',
+        INTERVAL '1 hour'
+    ) AS generated_hour
+),
 
-                --Step 3: Aggregate data with fewer rows
-solar_data AS(
-                    SELECT 
+solar_data AS (
+    SELECT 
         TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                    MAX(s.unit_generated) AS solar_unit_generated,
-                    MAX(s.kwh) AS solar_kwh  
+        MAX(s.unit_generated) AS solar_unit_generated,
+        MAX(s.kwh) AS solar_kwh  
     FROM solar s
     WHERE s."createdAt" >= (SELECT start_date FROM min_dates)
     GROUP BY hour
-), 
+    HAVING MAX(s.kwh) > 0
+),
 
-genset_data AS(
-                        SELECT 
+genset_data AS (
+    SELECT 
         TO_CHAR(m."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                        MAX(m.unit_generated) AS mains_unit_generated,
-                        MAX(m.kwh) AS genset_kwh  
+        MAX(m.unit_generated) AS mains_unit_generated,
+        MAX(m.kwh) AS genset_kwh  
     FROM genset m
     WHERE m."createdAt" >= (SELECT start_date FROM min_dates)
     GROUP BY hour
+    HAVING MAX(m.kwh) > 0
 ),
 
-            --Step 4: Calculate savings(with improved LAG performance)
-savings_data AS(
-                SELECT 
+savings_data AS (
+    SELECT 
         h.hour,
-                COALESCE(
-                    CASE 
+        s.solar_kwh,
+        m.genset_kwh,
+        COALESCE(
+            CASE 
                 WHEN COALESCE(s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER(ORDER BY h.hour), 0) > 0 
                  AND COALESCE(m.genset_kwh - LAG(m.genset_kwh, 1, m.genset_kwh) OVER(ORDER BY h.hour), 0) > 0 
-                THEN(s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER(ORDER BY h.hour)) * 18.4
+                THEN (s.solar_kwh - LAG(s.solar_kwh, 1, s.solar_kwh) OVER(ORDER BY h.hour)) * 18.4
                 ELSE 0
             END, 0
-                ) AS savings
+        ) AS savings
     FROM hours h
     LEFT JOIN solar_data s ON h.hour = s.hour
     LEFT JOIN genset_data m ON h.hour = m.hour
-            )
+)
 
-            --Step 5: Calculate total savings
-SELECT SUM(savings) AS total_savings FROM savings_data;`
-
+SELECT 
+    SUM(savings) AS total_savings
+FROM savings_data;`
 
                 , {
                     type: Sequelize.QueryTypes.SELECT,
