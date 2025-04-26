@@ -341,10 +341,10 @@ FROM savings_data;`
 
             console.log(average)
 
-            const s_m_permonth = result[0].total_savings;
+            const s_m_permonth = result[0].sum;
             const s_m_tillmonth = result_3[0].total_savings;
 
-            const s_g_permonth = result_2[0].total_savings;
+            const s_g_permonth = result_2[0].sum;
             const s_g_tillmonth = result_4[0].total_savings;
 
             return res.status(200).send({
