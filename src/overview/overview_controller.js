@@ -42,108 +42,119 @@ module.exports = {
             };
 
             const result = await Solar.sequelize.query(`WITH hours AS (
-    -- Generate hourly timestamps from the start of the current month to now
-            SELECT 
-                TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
-            FROM generate_series(
-                (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
-                NOW() AT TIME ZONE 'UTC',
-                INTERVAL '1 hour'
-            ) AS generated_hour
-        ), 
+        SELECT 
+            TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
+        FROM generate_series(
+            (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') AT TIME ZONE 'UTC',
+            (NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC',
+            INTERVAL '1 hour'
+        ) AS generated_hour
+    ), 
 
-        solar_data AS (
-            -- Aggregate solar data per hour for the current month
+    solar_data AS (
         SELECT 
             TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-            MAX(s.unit_generated) AS solar_unit_generated,  
             MAX(s.kwh) AS solar_kwh  
         FROM solar s
-        WHERE s."createdAt" >= DATE_TRUNC('month', NOW())  
+        WHERE s."createdAt" >= (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC')
         GROUP BY hour
-        ), 
+    ), 
 
-        mains_data AS (
-            -- Aggregate mains data per hour for the current month
-        SELECT 
-            TO_CHAR(m."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-            MAX(m.unit_generated) AS mains_unit_generated,  
-            MAX(m.kwh) AS mains_kwh  
-        FROM main m
-        WHERE m."createdAt" >= DATE_TRUNC('month', NOW())  
+    main_data AS (
+    SELECT 
+        TO_CHAR(g."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+            MAX(g.kwh) AS main_kwh  
+        FROM main g
+        WHERE g."createdAt" >= (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC')
+
         GROUP BY hour
-        )
+    ),
 
-        , savings_data AS (
+    savings_data AS (
         SELECT 
-        -- Calculate Savings if solar_kwh > 0 AND mains_kwh > 0
-        CASE 
-            WHEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) > 0 
-                 AND COALESCE(ABS(m.mains_kwh - LAG(m.mains_kwh) OVER (ORDER BY h.hour)), 0) > 0 
-            THEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) * 6.6
-            ELSE 0
-        END AS savings
+            h.hour,
+            s.solar_kwh,
+            g.main_kwh,
+            CASE 
+                WHEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) > 0 
+                AND COALESCE(ABS(g.main_kwh - LAG(g.main_kwh) OVER (ORDER BY h.hour)), 0) > 0 
+                THEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) * 6.6
+                ELSE 0
+            END AS savings
         FROM hours h
         LEFT JOIN solar_data s ON h.hour = s.hour
-        LEFT JOIN mains_data m ON h.hour = m.hour
+        LEFT JOIN main_data g ON h.hour = g.hour
     )
 
-    SELECT SUM(savings) AS total_savings FROM savings_data;
+    SELECT 
+        -- hour,
+        -- solar_kwh,
+        -- main_kwh,
+        sum(savings)
+    FROM savings_data
+
+        WHERE savings < 2000 and main_kwh <> 0 
+        -- ORDER BY hour
+        ;
     `, {
                 type: Sequelize.QueryTypes.SELECT,
             });
 
             const result_2 = await Solar.sequelize.query(`WITH hours AS (
-    -- Generate hourly timestamps from the start of the current month to now
-            SELECT 
+        SELECT 
             TO_CHAR(generated_hour + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour
-            FROM generate_series(
-                (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') 
-                AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC',
-                NOW() AT TIME ZONE 'UTC',
-                INTERVAL '1 hour'
-            ) AS generated_hour
-        ), 
+        FROM generate_series(
+            (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 hour') AT TIME ZONE 'UTC',
+            (NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC',
+            INTERVAL '1 hour'
+        ) AS generated_hour
+    ), 
 
-            solar_data AS (
-                -- Aggregate solar data per hour for the current month
-            SELECT 
-                TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                MAX(s.unit_generated) AS solar_unit_generated,  
-                MAX(s.kwh) AS solar_kwh  
-            FROM solar s
-            WHERE s."createdAt" >= DATE_TRUNC('month', NOW())  
-            GROUP BY hour
-            ), 
+    solar_data AS (
+        SELECT 
+            TO_CHAR(s."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+            MAX(s.kwh) AS solar_kwh  
+        FROM solar s
+        WHERE s."createdAt" >= (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC')
+        GROUP BY hour
+    ), 
 
-            genset_data AS (
-                -- Aggregate genset data per hour for the current month
-                SELECT 
-                    TO_CHAR(g."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
-                    MAX(g.unit_generated) AS genset_unit_generated,  
-                    MAX(g.kwh) AS genset_kwh  
-                FROM genset g
-                WHERE g."createdAt" >= DATE_TRUNC('month', NOW())  
-                GROUP BY hour
-            ),
+    genset_data AS (
+    SELECT 
+        TO_CHAR(g."createdAt" + INTERVAL '5 hours 30 minutes', 'YYYY-MM-DD HH24:00:00') AS hour,
+            MAX(g.kwh) AS genset_kwh  
+        FROM genset g
+        WHERE g."createdAt" >= (DATE_TRUNC('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'UTC')
 
-                savings_data AS (
-                SELECT 
-                    -- Calculate Savings if solar_kwh > 0 AND genset_kwh > 0
-                    CASE 
-                    WHEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) > 0 
-                    AND COALESCE(ABS(g.genset_kwh - LAG(g.genset_kwh) OVER (ORDER BY h.hour)), 0) > 0 
-                    THEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) * 18.4
-                         ELSE 0
-                    END AS savings
-                    FROM hours h
-                    LEFT JOIN solar_data s ON h.hour = s.hour
-                    LEFT JOIN genset_data g ON h.hour = g.hour
-                )
+        GROUP BY hour
+    ),
 
-                SELECT SUM(savings) AS total_savings FROM savings_data;
+    savings_data AS (
+        SELECT 
+            h.hour,
+            s.solar_kwh,
+            g.genset_kwh,
+            CASE 
+                WHEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) > 0 
+                AND COALESCE(ABS(g.genset_kwh - LAG(g.genset_kwh) OVER (ORDER BY h.hour)), 0) > 0 
+                THEN COALESCE(ABS(s.solar_kwh - LAG(s.solar_kwh) OVER (ORDER BY h.hour)), 0) * 18.4
+                ELSE 0
+            END AS savings
+        FROM hours h
+        LEFT JOIN solar_data s ON h.hour = s.hour
+        LEFT JOIN genset_data g ON h.hour = g.hour
+    )
 
+    SELECT 
+        -- hour,
+        -- solar_kwh,
+        -- genset_kwh,
+        sum(savings)
+    FROM savings_data
+
+        WHERE savings < 2000 and genset_kwh <> 0 
+        -- ORDER BY hour
+        ;
                 `, {
                 type: Sequelize.QueryTypes.SELECT,
             });
