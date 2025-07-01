@@ -67,7 +67,8 @@ module.exports = {
                     },
                     hours_operated: {
                         [Op.ne]: null,
-                        [Op.ne]: ''
+                        [Op.ne]: '',
+                        [Op.ne]: 0.0
                     }
                 },
                 order: [['createdAt', 'DESC']],
